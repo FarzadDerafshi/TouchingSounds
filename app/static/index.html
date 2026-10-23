@@ -576,6 +576,10 @@ input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; backgroun
   max-width: 540px; margin: 0 auto;
 }
 body:not([data-view="player"]) .miniplayer.has-source { display: flex; }
+/* While the on-screen keyboard is up, iOS keeps the page full height and slides
+   the visible part over it, so bars fixed to the bottom end up floating mid-screen.
+   Hide them until the keyboard closes. */
+body.typing .tabbar, body.typing .miniplayer { display: none !important; }
 .mp-art { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
 .mp-art.has-logo { background: var(--plate, #ececef); }
 .mp-art img { width: 100%; height: 100%; object-fit: contain; }
@@ -860,7 +864,7 @@ footer { text-align: center; font-size: 11px; color: var(--text-faint); padding:
     </nav>
 
     <div class="panel" id="panel-search">
-      <form class="search-box" role="search" onsubmit="event.preventDefault(); runSearch(true)">
+      <form class="search-box" role="search" onsubmit="event.preventDefault(); runSearch(true); $('search-input').blur()">
         <svg><use href="#i-search"/></svg>
         <label class="sr-only" for="search-input">Search radio stations</label>
         <input type="search" id="search-input" placeholder="Search stations, or paste a stream URL" autocomplete="off" enterkeyhint="search">
@@ -1250,6 +1254,21 @@ footer { text-align: center; font-size: 11px; color: var(--text-faint); padding:
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => runSearch(false), 450);
   });
+
+  // body.typing while a text field has focus, i.e. while the phone keyboard is up
+  // (see the .typing CSS rule). focusout comes before the next focusin, so moving
+  // between two fields keeps it on.
+  const isTextField = el => el && (el.tagName === 'TEXTAREA' ||
+    (el.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit|reset|color|file|image|hidden)$/i.test(el.type)));
+  document.addEventListener('focusin', e => document.body.classList.toggle('typing', isTextField(e.target)));
+  document.addEventListener('focusout', e => { if (!isTextField(e.relatedTarget)) document.body.classList.remove('typing'); });
+
+  // Close the keyboard once the results get scrolled (or tapped), as native apps do;
+  // a drag on the field itself is left alone.
+  window.addEventListener('touchmove', e => {
+    const inp = $('search-input');
+    if (document.activeElement === inp && e.target !== inp) inp.blur();
+  }, { passive: true });
 
   async function runSearch(now) {
     const q = $('search-input').value.trim();

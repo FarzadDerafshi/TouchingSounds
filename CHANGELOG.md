@@ -4,6 +4,31 @@ All notable changes to TouchingSounds are documented here.
 
 ---
 
+## [1.5.2] — 2026-10-23  **Search: the bottom bars no longer float mid-screen on iPhone**
+
+Not yet released.
+
+### Fixed
+- On the iPhone, scrolling search results with the keyboard open left the mini-player
+  and tab bar floating in the middle of the screen, drifting as the list moved
+  (reported with a screen recording). Cause: results appear while typing, so the
+  keyboard stayed up; iOS doesn't shrink the page for the keyboard but slides the visible
+  part over it, and the two bars are fixed to the bottom of the full page, not of what's
+  visible. Now:
+  - the keyboard closes when the results are dragged or tapped, and when Search is
+    pressed (as in native apps);
+  - while any text field has focus (keyboard up), the mini-player and tab bar are hidden
+    (`body.typing`), and they come back when it closes.
+
+### Tested
+Headless Edge at 390×844 against a fake speaker, live search "Russian" (37 results):
+field focused → both bars hidden; drag on a result → field loses focus, bars back;
+drag on the field itself → stays focused; Search key → unfocused, bars back; focus
+moved to a result's button → bars back; other screens unaffected. No page errors. The
+iOS keyboard itself can't be reproduced here: to be confirmed on the iPhone.
+
+---
+
 ## [1.5.1] — 2026-10-23  **Public release: settings in `.env`, MIT licence**
 
 Live 2026-10-23 (`568e80a`), released from Telegram `/release`. The first run wrote
