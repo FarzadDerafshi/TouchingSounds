@@ -1,0 +1,2682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TouchingSounds</title>
+<meta name="description" content="Internet radio and remote control for the Bose SoundTouch 20">
+
+<!-- Install as an app (PWA) -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#f4f2ee" media="(prefers-color-scheme: light)" data-auto="#f4f2ee">
+<meta name="theme-color" content="#1c1e24" media="(prefers-color-scheme: dark)" data-auto="#1c1e24">
+<script>
+  // Theme before the first paint, so the page doesn't flash dark on a light phone
+  // (the Theme section of the main script takes over from here).
+  (function () {
+    var m = 'auto';
+    try { m = localStorage.getItem('ts-theme-mode') || 'auto'; } catch (e) {}
+    var dark = m === 'dark' || (m !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  })();
+</script>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png">
+
+<!-- iOS Safari home-screen support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TouchingSounds">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<style>
+:root {
+  --bg:           oklch(19% 0.015 260);
+  --bg-grad:      oklch(22% 0.03 280);
+  --surface:      oklch(26% 0.02 260);
+  --surface-2:    oklch(30% 0.02 260);
+  --surface-hover:oklch(34% 0.02 260);
+  --border:       oklch(38% 0.02 260 / 0.55);
+  --text:         oklch(96% 0.004 260);
+  --text-dim:     oklch(72% 0.02 260);
+  --text-faint:   oklch(55% 0.02 260);
+  --accent:       oklch(74% 0.14 55);
+  --accent-hi:    oklch(80% 0.13 55);
+  --accent-lo:    oklch(64% 0.15 55);
+  --accent-soft:  oklch(74% 0.14 55 / 0.16);
+  --on-accent:    oklch(15% 0.01 55);
+  --green:        oklch(74% 0.16 148);
+  --red:          oklch(66% 0.19 25);
+  --heart:        oklch(68% 0.2 15);
+  --shadow:       0 20px 40px -12px oklch(0% 0 0 / 0.5);
+  --glass:        oklch(22% 0.02 260 / 0.82);
+  --radius-lg: 26px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --tabbar-h: 64px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+html[data-theme="light"] {
+  --bg:           oklch(96% 0.006 95);
+  --bg-grad:      oklch(93% 0.012 90);
+  --surface:      oklch(99% 0.002 95);
+  --surface-2:    oklch(95% 0.006 95);
+  --surface-hover:oklch(91% 0.008 95);
+  --border:       oklch(85% 0.01 95);
+  --text:         oklch(22% 0.012 260);
+  --text-dim:     oklch(42% 0.02 260);
+  --text-faint:   oklch(58% 0.015 260);
+  --accent:       oklch(60% 0.16 50);
+  --accent-hi:    oklch(56% 0.16 50);
+  --accent-lo:    oklch(52% 0.17 50);
+  --accent-soft:  oklch(60% 0.16 50 / 0.12);
+  --on-accent:    oklch(99% 0.005 50);
+  --heart:        oklch(58% 0.21 15);
+  --shadow:       0 20px 40px -14px oklch(0% 0 0 / 0.16);
+  --glass:        oklch(99% 0.002 95 / 0.86);
+  color-scheme: light;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background:
+    radial-gradient(120% 90% at 50% -10%, var(--bg-grad), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color .35s ease, color .35s ease;
+  /* room for the mini-player + tab bar on phones */
+  padding-bottom: calc(var(--tabbar-h) + 76px + var(--safe-b));
+}
+button, input { font-family: inherit; color: inherit; font-size: inherit; }
+button { -webkit-tap-highlight-color: transparent; background: none; border: none; cursor: pointer; }
+svg { display: block; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Layout ──
+   Phone: one view at a time, switched by the bottom tab bar.
+   Tablet landscape / desktop (>= 900px): player column + library column side by side. */
+.topbar, .layout { max-width: 560px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+.layout { display: block; }
+.col-player, .col-library { min-width: 0; }
+body:not([data-view="player"]) .col-player { display: none; }
+body[data-view="player"] .col-library { display: none; }
+.panel { display: none; }
+body[data-lib="search"]    #panel-search,
+body[data-lib="favorites"] #panel-favorites,
+body[data-lib="recent"]    #panel-recent { display: block; }
+.lib-tabs { display: none; }
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .topbar, .layout { max-width: 680px; }
+}
+@media (min-width: 900px) {
+  body { padding-bottom: 40px; }
+  .topbar, .layout { max-width: 1180px; padding-left: 28px; padding-right: 28px; }
+  .layout { display: grid; grid-template-columns: minmax(360px, 420px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  body .col-player, body .col-library { display: block !important; }
+  .col-player { position: sticky; top: 16px; }
+  .lib-tabs { display: flex; }
+  .tabbar, .miniplayer { display: none !important; }
+}
+
+/* ── Topbar ── */
+.topbar { padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; letter-spacing: .2px; }
+.brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+/* Device picker */
+.device-picker { position: relative; min-width: 0; display: flex; }
+.topbar-right { min-width: 0; }
+.brand { flex-shrink: 0; }
+.device-btn {
+  /* Shrinks with the top bar (the name ellipsizes) instead of running under the theme button. */
+  display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 230px; min-height: 38px;
+  padding: 0 12px; border-radius: 100px; border: 1px solid var(--border); background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--text-dim); transition: background .15s;
+}
+.device-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.device-btn:disabled { cursor: default; border-color: transparent; background: none; padding: 0 4px; }
+.device-btn .dn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.device-btn:disabled svg { display: none; }
+.device-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 240px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow); padding: 6px;
+}
+.device-menu[hidden] { display: none; }
+.device-opt {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 10px 12px; border-radius: 10px; min-height: 48px;
+}
+.device-opt:hover { background: var(--surface-2); }
+.device-opt.selected { background: var(--accent-soft); }
+.device-opt .do-name { font-size: 14px; font-weight: 600; }
+.device-opt .do-type { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.device-opt .do-check { margin-left: auto; color: var(--accent-hi); width: 16px; height: 16px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 0 3px oklch(74% 0.16 148 / 0.18); transition: background .3s, box-shadow .3s; }
+.dot.offline { background: var(--red); box-shadow: 0 0 0 3px oklch(66% 0.19 25 / 0.18); }
+.icon-btn {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .12s;
+}
+.icon-btn:hover { background: var(--surface-hover); }
+.icon-btn:active { transform: scale(.9); }
+.icon-btn svg { width: 17px; height: 17px; }
+
+/* ── Cards ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 12px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 13px; }
+.card-title { font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; }
+.card-head .card-title { margin: 0; }
+.link-btn { font-size: 12px; font-weight: 600; color: var(--accent-hi); padding: 4px 6px; border-radius: 8px; }
+.link-btn:hover { background: var(--accent-soft); }
+
+/* ── Hero: Now Playing ── */
+.hero-card {
+  background: linear-gradient(165deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 26px 22px 22px; box-shadow: var(--shadow); margin-bottom: 12px;
+  position: relative; overflow: hidden;
+}
+/* --tint is the station logo's main colour (set from JS); registered so it fades. */
+@property --tint { syntax: '<color>'; inherits: true; initial-value: transparent; }
+.hero-card { --tint: oklch(74% 0.14 55 / .45); transition: --tint .9s ease; }
+.hero-card::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--tint) 44%, transparent), transparent 70%);
+}
+html[data-theme="light"] .hero-card::before {
+  background: radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--tint) 22%, transparent), transparent 68%);
+}
+.hero-card > * { position: relative; }
+
+/* Speaker unreachable: say so, and stop offering controls that can't work */
+.offline-note { display: none; text-align: center; margin: -4px 0 18px; }
+.offline-note p { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 12px; }
+.offline-note .on-title { font-size: 15px; font-weight: 700; color: var(--red); }
+.hero-card.offline .offline-note { display: block; }
+.hero-card.offline .now-info, .hero-card.offline .eq { display: none; }
+.hero-card.offline .art { opacity: .4; filter: grayscale(1); }
+body.spk-offline .transport, body.spk-offline .vol-row, body.spk-offline .ctl-card {
+  opacity: .4; pointer-events: none; filter: grayscale(.6);
+}
+.btn-retry { padding: 9px 20px; border-radius: 100px; font-weight: 600; font-size: 13px;
+  background: var(--surface-2); border: 1px solid var(--border); }
+.btn-retry:hover { background: var(--surface-hover); }
+.btn-retry[disabled] { opacity: .6; }
+
+/* Tuning in: shown the moment a station is chosen, until the speaker plays it */
+.hero-card.tuning .art { animation: tune 1.2s ease-in-out infinite; }
+@keyframes tune { 50% { transform: scale(.96); opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .hero-card.tuning .art { animation: none; } }
+
+/* Skip buttons only for sources that have tracks */
+.transport .skip[hidden] { display: none; }
+
+/* Choosing a station for an empty preset */
+.assign-banner { display: none; align-items: center; gap: 10px; margin-bottom: 12px; padding: 12px 14px;
+  border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-hi);
+  font-size: 13.5px; font-weight: 600; border: 1px solid var(--accent); }
+body.assigning .assign-banner { display: flex; }
+.assign-banner span { flex: 1; min-width: 0; }
+.assign-banner button { font-weight: 700; padding: 4px 8px; border-radius: 8px; }
+.assign-banner button:hover { background: var(--accent-soft); }
+.btn-preset.unset { border-style: dashed; color: var(--text-faint); }
+.btn-preset.unset .pl { background: none; }
+.btn-preset.unset .pl svg { width: 20px; height: 20px; }
+.btn-preset.picking { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hi); }
+/* While choosing, a tap on a station saves it, so the play and save buttons would mislead */
+body.assigning .st-act[data-act="play"], body.assigning .st-act[data-act="preset"] { display: none; }
+.art-wrap { position: relative; width: 168px; height: 168px; margin: 0 auto 18px; }
+.art-wrap.can-open { cursor: zoom-in; }
+.art-wrap.can-open:active .art { transform: scale(.97); }
+.art-wrap.can-open:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 4px; border-radius: 24px; }
+.art { transition: transform .12s ease; }
+
+/* ── Cover viewer (tap the art while a song shows) ── */
+dialog.cover-view {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: none; background: #0d0e11; color: #f4f2ee; overflow: hidden;
+}
+dialog.cover-view[open] { display: flex; animation: cv-in .22s ease; }
+dialog.cover-view::backdrop { background: #000; }
+@keyframes cv-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { dialog.cover-view[open] { animation: none; } }
+.cv-bg {
+  position: absolute; inset: -40px; background: center / cover no-repeat;
+  filter: blur(40px) saturate(1.3) brightness(.45); transform: scale(1.1);
+}
+.cv-inner {
+  position: relative; z-index: 1; width: 100%; max-width: 560px; margin: 0 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: max(56px, calc(env(safe-area-inset-top) + 44px)) 20px max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  overflow-y: auto;
+}
+.cv-close {
+  position: absolute; z-index: 2; top: max(14px, calc(env(safe-area-inset-top) + 6px)); right: 14px;
+  width: 42px; height: 42px; border-radius: 50%; background: oklch(100% 0 0 / .14); color: #fff;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);
+}
+.cv-close svg { width: 20px; height: 20px; }
+.cv-art {
+  width: min(100%, 62vh); aspect-ratio: 1; border-radius: 18px; overflow: hidden; flex-shrink: 0;
+  background: var(--plate, #2a2c33); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 30px 60px -20px oklch(0% 0 0 / .7);
+}
+.cv-art img { width: 100%; height: 100%; object-fit: cover; -webkit-touch-callout: default; }
+.cv-art.logo img { object-fit: contain; width: 70%; height: 70%; }
+.cv-text { text-align: center; width: 100%; min-width: 0; }
+.cv-title { font-size: 22px; font-weight: 800; line-height: 1.25; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.cv-artist { font-size: 16px; color: oklch(100% 0 0 / .78); margin-top: 4px; overflow-wrap: anywhere; }
+.cv-station { font-size: 12.5px; color: oklch(100% 0 0 / .55); margin-top: 8px; }
+.cv-actions { display: flex; gap: 10px; width: 100%; max-width: 400px; }
+.cv-actions button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+  border-radius: 14px; font-size: 14.5px; font-weight: 700; color: #fff; background: oklch(100% 0 0 / .14);
+}
+.cv-actions button svg { width: 18px; height: 18px; flex-shrink: 0; }
+.cv-actions .cv-share { background: oklch(74% 0.14 55); color: oklch(15% 0.01 55); }
+.cv-actions .cv-wa { background: #25d366; color: #0b2e17; }
+.cv-find { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.cv-find span { width: 100%; text-align: center; font-size: 11.5px; color: oklch(100% 0 0 / .5); text-transform: uppercase; letter-spacing: .08em; }
+.cv-find a {
+  padding: 8px 14px; border-radius: 100px; font-size: 13px; font-weight: 600; color: #fff;
+  background: oklch(100% 0 0 / .1); border: 1px solid oklch(100% 0 0 / .16); text-decoration: none;
+}
+.cv-find a:hover, .cv-actions button:hover { filter: brightness(1.1); }
+.art {
+  width: 100%; height: 100%; border-radius: 22px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; box-shadow: 0 14px 30px -12px oklch(0% 0 0 / .45);
+}
+.art svg { width: 46px; height: 46px; color: var(--text-faint); }
+/* The logo sits on a "plate": its own background colour when the logo is opaque, so
+   no grey frame shows; a light neutral when it's transparent, so dark logos stay visible. */
+.art.has-logo { background: var(--plate, #ececef); border-color: transparent; transition: background .6s; }
+.art img { width: 100%; height: 100%; object-fit: contain; }
+.art img.small { width: var(--logo-w, 50%); height: auto; max-width: 66%; max-height: 66%; }
+.art img.padded { width: 82%; height: 82%; }
+/* A song cover fills the square; the station's logo then sits in a badge at the corner. */
+.art.is-cover img, .mp-art.is-cover img { width: 100%; height: 100%; object-fit: cover; }
+.st-badge {
+  position: absolute; left: -6px; top: -6px; width: 42px; height: 42px; border-radius: 12px; overflow: hidden;
+  background: var(--plate, #ececef); border: 3px solid var(--surface); display: none;
+  box-shadow: 0 6px 14px -6px oklch(0% 0 0 / .5);
+}
+.st-badge.show { display: block; }
+.st-badge img { width: 100%; height: 100%; object-fit: contain; }
+.track-name.song-in, .track-sub.song-in { animation: songin .45s ease; }
+@keyframes songin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .track-name.song-in, .track-sub.song-in { animation: none; } }
+.eq {
+  position: absolute; right: -6px; bottom: -6px; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 6px 16px -4px oklch(74% 0.14 55 / .55);
+  display: none; align-items: center; justify-content: center; gap: 3px; border: 3px solid var(--surface);
+}
+.hero-card.is-playing .eq { display: flex; }
+.eq span { width: 3px; height: 10px; border-radius: 2px; background: var(--on-accent); animation: eqbar 1.05s ease-in-out infinite; }
+.eq span:nth-child(1) { animation-delay: -0.9s; }
+.eq span:nth-child(2) { animation-delay: -0.6s; }
+.eq span:nth-child(3) { animation-delay: -0.3s; }
+@keyframes eqbar { 0%, 100% { height: 5px; } 50% { height: 14px; } }
+@media (prefers-reduced-motion: reduce) { .eq span { animation: none; } }
+
+.now-info { text-align: center; margin-bottom: 16px; }
+.source-badge {
+  display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  background: var(--accent-soft); color: var(--accent-hi); border-radius: 100px; padding: 4px 12px; margin-bottom: 10px;
+}
+.track-name { font-size: 19px; font-weight: 700; letter-spacing: -.2px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-sub { font-size: 13.5px; color: var(--text-dim); margin-top: 4px; min-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; min-height: 34px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+  padding: 7px 13px; border-radius: 100px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-dim); transition: background .15s, color .15s, transform .12s;
+}
+.chip:hover { background: var(--surface-hover); color: var(--text); }
+.chip:active { transform: scale(.95); }
+.chip svg { width: 15px; height: 15px; }
+.chip.on { color: var(--heart); }
+.chip.on svg { fill: currentColor; }
+.chip[hidden] { display: none; }
+
+/* ── Transport ── */
+.transport { display: flex; justify-content: center; align-items: center; gap: 14px; margin-bottom: 22px; }
+.btn { transition: transform .12s ease, background .15s, box-shadow .15s; }
+.btn:active { transform: scale(.9); }
+.btn-icon {
+  background: var(--surface-2); color: var(--text); width: 50px; height: 50px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);
+}
+.btn-icon svg { width: 19px; height: 19px; }
+.btn-icon:hover { background: var(--surface-hover); }
+.btn-stop svg { width: 15px; height: 15px; }
+.btn-sleep svg { width: 18px; height: 18px; }
+.btn-sleep .sleep-left { display: none; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.btn-sleep.on { background: var(--accent-soft); color: var(--accent-hi); border-color: var(--accent); }
+.btn-sleep.on svg { display: none; }
+.btn-sleep.on .sleep-left { display: block; }
+#sleep-text { white-space: normal; }
+.sleep-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.sleep-grid button {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px 6px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sleep-grid button span { display: block; font-size: 11px; font-weight: 500; color: var(--text-dim); margin-top: 2px; }
+.sleep-grid button:hover { border-color: var(--accent); background: var(--surface-hover); }
+.sleep-grid button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.sheet-actions .btn-off { margin-right: auto; color: var(--heart); font-weight: 700; }
+.btn-alarm { position: relative; }
+.btn-alarm svg { width: 19px; height: 19px; }
+.btn-alarm .alarm-at { display: none; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.btn-alarm.on { background: var(--accent-soft); color: var(--accent-hi); border-color: var(--accent); }
+.btn-alarm.on svg { display: none; }
+.btn-alarm.on .alarm-at { display: block; }
+.btn-alarm.problem::after {
+  content: ''; position: absolute; top: 2px; right: 2px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--red); border: 2px solid var(--surface);
+}
+@media (max-width: 400px) {
+  .transport { gap: 10px; }
+  .transport .btn-icon { width: 46px; height: 46px; }
+}
+#alarm-text { white-space: normal; }
+.alarm-list { display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow-y: auto; }
+.alarm-row {
+  display: flex; align-items: center; gap: 10px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 12px 4px 4px;
+}
+.alarm-row .ar-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px; border-radius: var(--radius-sm); }
+.alarm-row .ar-main:hover { background: var(--surface-hover); }
+.alarm-row .at { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.alarm-row .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.alarm-row .info span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alarm-row .d { font-size: 12.5px; font-weight: 600; }
+.alarm-row .s { font-size: 12px; color: var(--text-dim); }
+.alarm-row .last { font-size: 11.5px; color: var(--text-faint); }
+.alarm-row .last.bad { color: var(--red); font-weight: 600; }
+.alarm-row .last.ring { color: var(--accent-hi); font-weight: 600; }
+.alarm-row.off .at, .alarm-row.off .d, .alarm-row.off .s { opacity: .45; }
+.switch { position: relative; width: 44px; height: 26px; flex-shrink: 0; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--border); transition: background .15s; pointer-events: none; }
+.switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px oklch(0% 0 0 / .3); }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent-hi); outline-offset: 2px; }
+.alarm-empty { font-size: 13px; color: var(--text-faint); text-align: center; padding: 18px 8px; }
+.alarm-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin: 14px 0 6px; }
+.alarm-form label b { color: var(--text); font-variant-numeric: tabular-nums; }
+.alarm-form input[type=time] {
+  display: block; width: 100%; margin-top: 10px; font: inherit; font-size: 34px; font-weight: 800; text-align: center;
+  font-variant-numeric: tabular-nums; color: var(--text); background: var(--surface-2); color-scheme: inherit;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px;
+}
+.day-chips { display: flex; gap: 6px; }
+.day-chips button {
+  flex: 1; padding: 9px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+}
+.day-chips button.on { background: var(--accent-soft); color: var(--accent-hi); border-color: var(--accent); }
+.alarm-form .af-hint { font-size: 12px; color: var(--text-faint); margin: 6px 0 0; white-space: normal; }
+.alarm-form select {
+  width: 100%; font: inherit; font-size: 14px; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px;
+}
+.alarm-form input[type=range] { width: 100%; }
+.alarm-form .sheet-actions, #alarm-listview .sheet-actions { gap: 8px; }
+.alarm-form .sheet-actions .btn-ghost { padding: 10px 14px; }
+.btn-ghost.btn-save { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn-ghost.btn-save:hover { filter: brightness(1.05); background: var(--accent); color: var(--on-accent); }
+.btn-play {
+  background: linear-gradient(160deg, var(--accent-hi), var(--accent-lo)); color: var(--on-accent);
+  width: 66px; height: 66px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 24px -8px oklch(74% 0.14 55 / .55);
+}
+.btn-play svg { width: 24px; height: 24px; }
+.btn-play:hover { filter: brightness(1.05); }
+
+/* ── Volume ── */
+.vol-row { display: flex; align-items: center; gap: 12px; }
+.btn-mute {
+  background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border);
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s, transform .12s;
+}
+.btn-mute svg { width: 17px; height: 17px; }
+.btn-mute:hover { background: var(--surface-hover); }
+.btn-mute:active { transform: scale(.9); }
+.btn-mute.muted { color: var(--red); }
+input[type=range] {
+  --pct: 20%;
+  flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--pct), var(--surface-2) var(--pct), var(--surface-2) 100%);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--text);
+  border: 3px solid var(--accent); box-shadow: 0 2px 6px oklch(0% 0 0 / .35); cursor: pointer;
+}
+input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--text); border: 3px solid var(--accent); cursor: pointer; }
+input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--surface-2); }
+.vol-num { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text-faint); width: 28px; text-align: right; flex-shrink: 0; }
+
+/* ── Segmented source control ── */
+.segmented { position: relative; display: flex; background: var(--surface-2); border-radius: var(--radius-sm); padding: 4px; }
+.seg-indicator {
+  position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n, 3));
+  background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius-sm) - 4px);
+  box-shadow: 0 2px 8px oklch(0% 0 0 / .18); transition: transform .28s cubic-bezier(.32,.9,.35,1), opacity .2s; z-index: 0;
+}
+.seg-btn {
+  position: relative; z-index: 1; flex: 1; color: var(--text-dim); border-radius: calc(var(--radius-sm) - 4px);
+  padding: 10px 6px; font-size: 13px; font-weight: 600; min-height: 44px; transition: color .2s;
+}
+.seg-btn.active { color: var(--accent-hi); }
+
+/* ── Presets ── */
+.presets-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.btn-preset {
+  position: relative; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 8px; font-size: 12px; text-align: center; min-height: 72px; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  transition: background .15s, border-color .15s, transform .12s;
+}
+.btn-preset:hover { border-color: var(--accent); background: var(--surface-hover); }
+.btn-preset:active { transform: scale(.95); }
+.btn-preset.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.btn-preset .pn { font-size: 11px; font-weight: 800; color: var(--accent); position: absolute; top: 6px; left: 8px; }
+.btn-preset .pl { width: 30px; height: 30px; border-radius: 8px; overflow: hidden; background: var(--surface); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.btn-preset .pl img { width: 100%; height: 100%; object-fit: contain; background: #ececef; }
+.btn-preset .pl svg { width: 17px; height: 17px; color: var(--text-faint); }
+.btn-preset .nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-preset:disabled { opacity: .45; cursor: default; }
+.btn-preset:disabled:hover { border-color: var(--border); background: var(--surface-2); }
+.hint { font-size: 11.5px; color: var(--text-faint); margin-top: 10px; line-height: 1.5; }
+
+/* ── Library ── */
+.lib-tabs { gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 12px; }
+.lib-tab { flex: 1; padding: 10px; font-size: 13.5px; font-weight: 600; color: var(--text-dim); border-radius: 9px; min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.lib-tab svg { width: 16px; height: 16px; }
+.lib-tab:hover { color: var(--text); }
+.lib-tab.active { background: var(--surface-2); color: var(--accent-hi); }
+.count { font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent-hi); padding: 1px 7px; border-radius: 100px; }
+.count:empty { display: none; }
+
+.search-box { position: relative; margin-bottom: 12px; }
+.search-box svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-faint); pointer-events: none; }
+.search-box input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 13px 14px 13px 42px; border-radius: var(--radius-sm); font-size: 16px; outline: none; min-height: 48px;
+  transition: border-color .15s;
+}
+.search-box input:focus { border-color: var(--accent); }
+.search-box input::placeholder { color: var(--text-faint); }
+.search-box input::-webkit-search-cancel-button { filter: grayscale(1); }
+
+.list { display: flex; flex-direction: column; gap: 8px; }
+@media (min-width: 1200px) { .list { display: grid; grid-template-columns: 1fr 1fr; } }
+.st-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 10px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.st-row:hover { background: var(--surface-hover); }
+.st-row.playing { border-color: var(--accent); }
+.st-logo { width: 46px; height: 46px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+.st-logo img { width: 100%; height: 100%; object-fit: contain; background: #ececef; }
+.st-logo svg { width: 20px; height: 20px; color: var(--text-faint); }
+.st-info { flex: 1; min-width: 0; }
+.st-name { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-acts { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.st-act { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-faint); transition: background .15s, color .15s, transform .12s; }
+.st-act:hover { background: var(--surface-2); color: var(--text); }
+.st-act:active { transform: scale(.88); }
+.st-act svg { width: 19px; height: 19px; }
+.st-act.on { color: var(--heart); }
+.st-act.on svg { fill: currentColor; }
+.st-act.play { background: var(--accent); color: var(--on-accent); margin-left: 4px; }
+.st-act.play:hover { background: var(--accent-hi); color: var(--on-accent); }
+
+.empty { text-align: center; padding: 34px 20px; color: var(--text-faint); font-size: 13.5px; line-height: 1.6; }
+.empty svg { width: 34px; height: 34px; margin: 0 auto 10px; opacity: .6; }
+.empty b { color: var(--text-dim); }
+.spinner { width: 26px; height: 26px; margin: 30px auto; border-radius: 50%; border: 3px solid var(--surface-2); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.panel-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* ── Phone: mini-player + tab bar ── */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; justify-content: space-around; align-items: stretch;
+  height: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: var(--safe-b);
+  background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+}
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10.5px; font-weight: 600; color: var(--text-faint); }
+.tab svg { width: 22px; height: 22px; }
+.tab.active { color: var(--accent-hi); }
+.miniplayer {
+  position: fixed; left: 10px; right: 10px; z-index: 49;
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 8px);
+  display: none; align-items: center; gap: 11px; padding: 8px 8px 8px 8px;
+  background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); cursor: pointer;
+  max-width: 540px; margin: 0 auto;
+}
+body:not([data-view="player"]) .miniplayer.has-source { display: flex; }
+.mp-art { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+.mp-art.has-logo { background: var(--plate, #ececef); }
+.mp-art img { width: 100%; height: 100%; object-fit: contain; }
+.mp-art img.small, .mp-art img.padded { width: 80%; height: 80%; }
+.mp-art svg { width: 20px; height: 20px; color: var(--text-faint); }
+.mp-info { flex: 1; min-width: 0; }
+.mp-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.mp-play { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mp-play svg { width: 18px; height: 18px; }
+
+/* ── Preset picker sheet ── */
+dialog.sheet {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 22px; padding: 22px; width: min(440px, calc(100vw - 24px)); max-height: 90vh;
+  box-shadow: var(--shadow); margin: auto;
+}
+dialog.sheet::backdrop { background: oklch(0% 0 0 / .55); backdrop-filter: blur(3px); }
+@media (max-width: 899px) {
+  dialog.sheet { margin: auto auto 0; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(22px + var(--safe-b)); border-bottom: none; }
+}
+.sheet h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.sheet p { font-size: 13px; color: var(--text-dim); margin-bottom: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet .presets-grid .btn-preset { min-height: 80px; }
+.sheet-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.btn-ghost { padding: 10px 18px; border-radius: var(--radius-sm); font-weight: 600; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); background: var(--surface-hover); }
+
+/* ── Speakers wizard (1.5): add a speaker, change its Wi-Fi, remove it ── */
+.device-menu .dm-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+.device-opt.dm-add { color: var(--accent-hi); font-weight: 600; font-size: 14px; }
+.device-opt.dm-add svg { width: 18px; height: 18px; }
+dialog.wizard {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: none; color: var(--text); overflow: hidden;
+  background: radial-gradient(120% 60% at 50% 0%, var(--bg-grad), transparent 70%), var(--bg);
+}
+dialog.wizard[open] { display: flex; animation: cv-in .2s ease; }
+dialog.wizard::backdrop { background: oklch(0% 0 0 / .6); }
+@media (min-width: 600px) {
+  dialog.wizard { margin: auto; width: 440px; height: min(860px, calc(100vh - 40px));
+    border-radius: 26px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+}
+@media (prefers-reduced-motion: reduce) { dialog.wizard[open] { animation: none; } }
+.wz { width: 100%; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) 20px max(24px, calc(env(safe-area-inset-bottom) + 16px)); }
+.wz-top { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.wz-round { width: 40px; height: 40px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wz-round:hover { background: var(--surface-hover); }
+.wz-round svg { width: 18px; height: 18px; }
+.wz-step { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); flex: 1; min-width: 0; }
+.wz h2 { font-size: 26px; line-height: 1.15; font-weight: 800; letter-spacing: -.3px; }
+.wz h2 em { font-style: normal; color: var(--accent-hi); }
+.wz .lead { font-size: 15px; line-height: 1.45; color: var(--text-dim); }
+.wz-card { border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border); }
+.wz-list { display: flex; flex-direction: column; overflow: hidden; }
+.wz-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; min-height: 60px; width: 100%; text-align: left; }
+.wz-row + .wz-row { border-top: 1px solid var(--border); }
+button.wz-row:hover { background: var(--surface-hover); }
+.wz-row .t { font-weight: 700; font-size: 15px; }
+.wz-row .s { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+.wz-row .grow { flex: 1; min-width: 0; }
+.wz-row .grow > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wz-row .grow > div.s.wrap { white-space: normal; }
+.wz-ico { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-dim); }
+.wz-ico svg { width: 22px; height: 22px; }
+.wz-tag { font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 4px 8px; border-radius: 100px; background: oklch(74% 0.16 148 / .18); color: var(--green); flex-shrink: 0; }
+.wz-tag.warn { background: var(--accent-soft); color: var(--accent-hi); }
+.wz-mini { font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 100px; background: var(--surface-2); border: 1px solid var(--border); flex-shrink: 0; }
+.wz-mini:hover { background: var(--surface-hover); }
+.wz-mini.danger { color: var(--heart); }
+.wz-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 54px; border-radius: 16px;
+  background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 16px; text-decoration: none; }
+.wz-btn svg { width: 20px; height: 20px; }
+.wz-btn:hover:not(:disabled) { filter: brightness(1.05); }
+.wz-btn:disabled { background: var(--surface-2); color: var(--text-dim); cursor: default; }
+.wz-btn.ghost { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 15.5px; min-height: 52px; }
+.wz-btn.danger { background: var(--red); color: #fff; }
+.wz-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 8px; }
+.wz-note { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); text-align: center; }
+.wz-label { font-size: 13px; font-weight: 700; color: var(--text-dim); }
+.wz-input { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 0 8px 0 16px; border-radius: 14px;
+  background: var(--surface); border: 1.5px solid var(--border); }
+.wz-input:focus-within { border-color: var(--accent); }
+.wz-input input, .wz-input select { flex: 1; min-width: 0; background: none; border: none; outline: none; font-size: 17px; padding: 14px 0; color: var(--text); }
+.wz-input select option { background: var(--surface); }
+.wz-field { display: flex; flex-direction: column; gap: 8px; }
+.wz-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.wz-chips button { padding: 8px 14px; border-radius: 100px; font-size: 13.5px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); }
+.wz-chips button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.wz-info { display: flex; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface); font-size: 13px; line-height: 1.45; color: var(--text-dim); }
+.wz-info svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+.wz-info.ok svg { color: var(--green); }
+.wz-info.danger { background: oklch(66% 0.19 25 / .13); color: var(--text); }
+.wz-info.danger svg { color: var(--red); }
+.wz-info a { color: var(--accent-hi); }
+.wz-hint { font-size: 12.5px; color: var(--text-faint); }
+.wz-link { color: var(--accent-hi); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; align-self: center; padding: 6px; }
+.wz-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--surface-2); border-top-color: var(--accent); animation: wz-spin .9s linear infinite; flex-shrink: 0; }
+@keyframes wz-spin { to { transform: rotate(360deg); } }
+.wz-state { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wz-state.done { background: var(--green); color: oklch(18% 0.03 148); }
+.wz-state.done svg { width: 15px; height: 15px; }
+.wz-state.pending { border: 2px solid var(--border); }
+.wz-state.failed { background: var(--red); color: #fff; font-weight: 800; }
+.wz-row.pending .t { color: var(--text-dim); }
+.wz-bars { display: flex; align-items: flex-end; gap: 2px; height: 16px; flex-shrink: 0; }
+.wz-bars i { width: 4px; border-radius: 1px; background: var(--surface-hover); }
+.wz-bars i.on { background: var(--text); }
+.wz-hero { display: flex; justify-content: center; padding: 4px 0; color: var(--text-dim); }
+.wz-hero svg { width: 100%; max-width: 300px; height: auto; }
+.wz-keypad { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 12px; }
+.wz-keypad svg.kp { width: 100%; height: auto; }
+.kp-body { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; }
+.kp-key rect, .kp-key circle { fill: var(--surface); stroke: var(--text-faint); stroke-width: 1.5; }
+.kp-key text { fill: var(--text-dim); font: 700 16px -apple-system, "Segoe UI", sans-serif; text-anchor: middle; dominant-baseline: central; }
+.kp-key.on rect, .kp-key.on circle { fill: var(--accent); stroke: var(--accent); }
+.kp-key.on text { fill: var(--on-accent); }
+.kp-key.on { animation: kp-pulse 1.6s ease-in-out infinite; }
+@keyframes kp-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .kp-key.on { animation: none; } .wz-spin { animation-duration: 3s; } }
+.kp-cap { fill: var(--text-faint); font: 700 9.5px -apple-system, "Segoe UI", sans-serif; text-anchor: middle; letter-spacing: .08em; }
+.kp-sep { stroke: var(--border); stroke-width: 1.5; }
+.wz-count { display: flex; align-items: center; gap: 18px; }
+.wz-count svg { width: 76px; height: 76px; flex-shrink: 0; }
+.wz-count .ring-bg { fill: none; stroke: var(--surface-hover); stroke-width: 7; }
+.wz-count .ring { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.wz-count text { fill: var(--text); font: 800 24px -apple-system, "Segoe UI", sans-serif; text-anchor: middle; dominant-baseline: central; }
+.wz-count .msg { font-size: 14px; line-height: 1.45; color: var(--text-dim); }
+.wz-count .msg b { color: var(--text); }
+.wz-light { display: flex; align-items: center; gap: 12px; padding: 12px 14px; font-size: 14px; }
+.wz-light i { width: 14px; height: 14px; border-radius: 50%; background: oklch(78% 0.15 75); box-shadow: 0 0 12px oklch(78% 0.15 75); flex-shrink: 0; }
+.wz-done-ico { width: 72px; height: 72px; border-radius: 50%; background: oklch(74% 0.16 148 / .18); color: var(--green); display: flex; align-items: center; justify-content: center; align-self: center; }
+.wz-done-ico svg { width: 38px; height: 38px; }
+.wz-center { text-align: center; }
+.wz-kv { display: flex; justify-content: space-between; gap: 12px; padding: 13px 16px; font-size: 14.5px; }
+.wz-kv + .wz-kv { border-top: 1px solid var(--border); }
+.wz-kv span:first-child { color: var(--text-dim); }
+.wz-kv span:last-child { font-weight: 600; text-align: right; }
+.wz-check { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; font-size: 14px; line-height: 1.45; cursor: pointer; }
+.wz-check input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); flex-shrink: 0; }
+.wz-steps { display: flex; flex-direction: column; }
+.wz-steps li { list-style: none; display: flex; gap: 12px; padding: 12px 16px; font-size: 14px; line-height: 1.45; }
+.wz-steps li + li { border-top: 1px solid var(--border); }
+.wz-steps li > div { flex: 1; min-width: 0; }
+.wz-steps li b.n { width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 12.5px; flex-shrink: 0; }
+.wz-steps li.now b.n { background: var(--accent); color: var(--on-accent); }
+.wz-steps li.past { color: var(--text-dim); }
+.wz-steps li .wz-btn { margin-top: 10px; min-height: 46px; font-size: 15px; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; left: 50%; transform: translateX(-50%) translateY(8px);
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 80px);
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  padding: 11px 20px; border-radius: 100px; font-size: 13px; opacity: 0; pointer-events: none;
+  transition: opacity .25s, transform .25s; z-index: 999; max-width: calc(100vw - 32px);
+  box-shadow: 0 10px 30px -8px oklch(0% 0 0 / .4); text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.error { border-color: var(--red); }
+@media (min-width: 900px) { #toast { bottom: 28px; } }
+
+footer { text-align: center; font-size: 11px; color: var(--text-faint); padding: 18px 16px 8px; }
+</style>
+</head>
+<body data-view="player" data-lib="search">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-note" viewBox="0 0 24 24"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle fill="currentColor" cx="6" cy="18" r="3"/><circle fill="currentColor" cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6" y="5" width="4" height="14" rx="1"/><rect fill="currentColor" x="14" y="5" width="4" height="14" rx="1"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></symbol>
+  <symbol id="i-player" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-dot"></span>TouchingSounds</div>
+  <div class="topbar-right">
+    <div class="device-picker">
+      <button class="device-btn" id="device-btn" aria-haspopup="menu" aria-expanded="false" disabled>
+        <span class="dot" id="dot"></span><span class="dn" id="device-name">SoundTouch</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="device-menu" id="device-menu" role="menu" aria-label="Choose speaker" hidden></div>
+    </div>
+    <button class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle light/dark theme">
+      <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ── Player column ── -->
+  <section class="col-player" aria-label="Player">
+    <div class="hero-card" id="hero-card">
+      <div class="art-wrap" id="art-wrap">
+        <div class="art" id="art"><svg><use href="#i-note"/></svg></div>
+        <div class="st-badge" id="st-badge" aria-hidden="true"></div>
+        <div class="eq" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+      <div class="offline-note" role="alert">
+        <div class="on-title" id="off-title">Speaker unreachable</div>
+        <p id="off-text"></p>
+        <button class="btn-retry" id="btn-retry" onclick="retryNow()">Try again</button>
+      </div>
+      <div class="now-info">
+        <span class="source-badge" id="source-badge">&#8212;</span>
+        <h1 class="track-name" id="track-name">&#8212;</h1>
+        <p class="track-sub" id="track-sub"></p>
+        <div class="now-actions">
+          <button class="chip" id="now-fav" hidden onclick="toggleFavorite(current)"><svg><use href="#i-heart"/></svg><span>Favorite</span></button>
+          <button class="chip" id="now-preset" hidden onclick="openPresetSheet(current)"><svg><use href="#i-pin"/></svg><span>Save to preset</span></button>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="btn btn-icon skip" onclick="key('PREV_TRACK')" aria-label="Previous track">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6L9 12l11 6z"/></svg>
+        </button>
+        <button class="btn btn-play" id="btn-play" onclick="togglePlay()" aria-label="Play or pause">
+          <svg class="play-icon"><use href="#i-play"/></svg>
+        </button>
+        <button class="btn btn-icon skip" onclick="key('NEXT_TRACK')" aria-label="Next track">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6l11 6-11 6z"/></svg>
+        </button>
+        <button class="btn btn-icon btn-stop" onclick="key('STOP')" aria-label="Stop">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+        </button>
+        <button class="btn btn-icon btn-sleep" id="btn-sleep" onclick="openSleepSheet()" aria-label="Sleep timer" title="Sleep timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><path d="M15 4h4l-4 4h4"/></svg>
+          <span class="sleep-left" id="sleep-left"></span>
+        </button>
+        <button class="btn btn-icon btn-alarm" id="btn-alarm" onclick="openAlarmSheet()" aria-label="Alarms" title="Alarms">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M5 3 2 6M22 6l-3-3M6.4 19.6 5 21M17.6 19.6 19 21"/></svg>
+          <span class="alarm-at" id="alarm-at"></span>
+        </button>
+      </div>
+
+      <div class="vol-row">
+        <button class="btn-mute" id="btn-mute" onclick="key('MUTE')" aria-label="Mute">
+          <svg id="mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>
+          </svg>
+        </button>
+        <input type="range" id="vol-slider" min="0" max="100" value="20" aria-label="Volume"
+               oninput="onVolInput(this.value)" onchange="setVol(this.value)">
+        <span class="vol-num" id="vol-num">20</span>
+      </div>
+    </div>
+
+    <div class="card ctl-card">
+      <div class="card-head"><h2 class="card-title">Presets</h2></div>
+      <div class="presets-grid" id="presets-grid"></div>
+      <p class="hint">Tap to play, or tap an empty button to pick a station for it. To change a button, use <b>Save to preset</b> on any station.</p>
+    </div>
+
+    <div class="card ctl-card" id="source-card" hidden>
+      <div class="card-head"><h2 class="card-title">Source</h2></div>
+      <div class="segmented" id="segmented">
+        <div class="seg-indicator" id="seg-indicator"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Library column ── -->
+  <section class="col-library" aria-label="Radio library">
+    <div class="assign-banner" role="status">
+      <span id="assign-text"></span>
+      <button onclick="cancelAssign()">Cancel</button>
+    </div>
+    <nav class="lib-tabs" aria-label="Library">
+      <button class="lib-tab" data-lib="search" onclick="setLib('search')"><svg><use href="#i-search"/></svg>Search</button>
+      <button class="lib-tab" data-lib="favorites" onclick="setLib('favorites')"><svg><use href="#i-heart"/></svg>Favorites <span class="count" id="fav-count"></span></button>
+      <button class="lib-tab" data-lib="recent" onclick="setLib('recent')"><svg><use href="#i-clock"/></svg>Recent</button>
+    </nav>
+
+    <div class="panel" id="panel-search">
+      <form class="search-box" role="search" onsubmit="event.preventDefault(); runSearch(true)">
+        <svg><use href="#i-search"/></svg>
+        <label class="sr-only" for="search-input">Search radio stations</label>
+        <input type="search" id="search-input" placeholder="Search stations, or paste a stream URL" autocomplete="off" enterkeyhint="search">
+      </form>
+      <div id="search-results"></div>
+    </div>
+
+    <div class="panel" id="panel-favorites">
+      <div id="favorites-list"></div>
+    </div>
+
+    <div class="panel" id="panel-recent">
+      <div id="recent-list"></div>
+    </div>
+  </section>
+</main>
+
+<footer id="footer">TouchingSounds</footer>
+
+<!-- Phone only -->
+<div class="miniplayer" id="miniplayer" onclick="setView('player')">
+  <div class="mp-art" id="mp-art"><svg><use href="#i-note"/></svg></div>
+  <div class="mp-info"><div class="mp-name" id="mp-name">&#8212;</div><div class="mp-sub" id="mp-sub"></div></div>
+  <button class="mp-play" id="mp-play" aria-label="Play or pause" onclick="event.stopPropagation(); togglePlay()"><svg class="play-icon"><use href="#i-play"/></svg></button>
+</div>
+<nav class="tabbar" aria-label="Sections">
+  <button class="tab" data-view="player" onclick="setView('player')"><svg><use href="#i-player"/></svg>Player</button>
+  <button class="tab" data-view="search" onclick="setView('search')"><svg><use href="#i-search"/></svg>Search</button>
+  <button class="tab" data-view="favorites" onclick="setView('favorites')"><svg><use href="#i-heart"/></svg>Favorites</button>
+  <button class="tab" data-view="recent" onclick="setView('recent')"><svg><use href="#i-clock"/></svg>Recent</button>
+</nav>
+
+<dialog class="sheet" id="preset-sheet" aria-labelledby="sheet-title">
+  <h3 id="sheet-title">Save to a preset button</h3>
+  <p id="sheet-station"></p>
+  <div class="presets-grid" id="sheet-grid"></div>
+  <div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancel</button></div>
+</dialog>
+
+<dialog class="sheet" id="sleep-sheet" aria-labelledby="sleep-title">
+  <h3 id="sleep-title">Sleep timer</h3>
+  <p id="sleep-text">The speaker fades out and switches to standby.</p>
+  <div class="sleep-grid" id="sleep-grid"></div>
+  <div class="sheet-actions">
+    <button class="btn-ghost btn-off" id="sleep-off" onclick="setSleep(0)" hidden>Turn off</button>
+    <button class="btn-ghost" onclick="$('sleep-sheet').close()">Cancel</button>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="alarm-sheet" aria-labelledby="alarm-title">
+  <div id="alarm-listview">
+    <h3 id="alarm-title">Alarms</h3>
+    <p id="alarm-text"></p>
+    <div class="alarm-list" id="alarm-list"></div>
+    <div class="sheet-actions">
+      <button class="btn-ghost btn-save" id="alarm-add" onclick="editAlarm(null)">New alarm</button>
+      <button class="btn-ghost" onclick="$('alarm-sheet').close()">Close</button>
+    </div>
+  </div>
+  <form id="alarm-form" class="alarm-form" hidden onsubmit="saveAlarm(event)">
+    <h3 id="af-title">New alarm</h3>
+    <input type="time" id="af-time" required aria-label="Time">
+    <label>Repeat</label>
+    <div class="day-chips" id="af-days"></div>
+    <p class="af-hint" id="af-hint"></p>
+    <label for="af-station">Station</label>
+    <select id="af-station"></select>
+    <label for="af-vol">Wake-up volume <b id="af-vol-num"></b></label>
+    <input type="range" id="af-vol" min="5" max="70" oninput="$('af-vol-num').textContent = this.value">
+    <p class="af-hint">Starts quietly and rises to this over a minute and a half. If the station won't play, a preset plays instead.</p>
+    <div class="sheet-actions">
+      <button type="button" class="btn-ghost btn-off" id="af-delete" onclick="deleteAlarm()">Delete</button>
+      <button type="button" class="btn-ghost" id="af-test" onclick="saveAlarm(null, true)">Try it</button>
+      <button type="button" class="btn-ghost" onclick="showAlarmList()">Cancel</button>
+      <button type="submit" class="btn-ghost btn-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="cover-view" id="cover-view" aria-label="Song cover">
+  <div class="cv-bg" id="cv-bg"></div>
+  <button class="cv-close" onclick="closeCover()" aria-label="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="cv-inner" id="cv-inner">
+    <div class="cv-art" id="cv-art"></div>
+    <div class="cv-text">
+      <div class="cv-title" id="cv-title"></div>
+      <div class="cv-artist" id="cv-artist"></div>
+      <div class="cv-station" id="cv-station"></div>
+    </div>
+    <div class="cv-actions">
+      <button class="cv-share" id="cv-share" onclick="shareSong()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+        <span id="cv-share-label">Share</span>
+      </button>
+      <button class="cv-wa" onclick="shareWhatsApp()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>
+        WhatsApp
+      </button>
+    </div>
+    <div class="cv-find" id="cv-find"></div>
+  </div>
+</dialog>
+
+<dialog class="wizard" id="wizard" aria-label="Speakers"><div class="wz" id="wz-body"></div></dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // ── State ───────────────────────────────────────────────────────────────────
+  let playStatus = '';
+  let spk = null;          // last /api/status
+  let current = null;         // station object for what's playing, when we know it
+  let presets = [];
+  let devices = [];
+  let deviceId = '';          // host of the selected speaker (X-TS-Device)
+  let favorites = [];
+  let recentList = [];
+  let lastResults = [];
+  const favIds = () => new Set(favorites.map(f => f.id));
+
+  // ── Utils ───────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Logos go through our server: many are http, which an https page can't load.
+  const artUrl = u => u ? '/api/art?url=' + encodeURIComponent(u) : '';
+  const icon = (id, cls = '') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
+
+  function logoHtml(url, fallback = 'i-radio') {
+    if (!url) return icon(fallback);
+    return `<img src="${esc(artUrl(url))}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElementNS('http://www.w3.org/2000/svg','svg'),{innerHTML:'<use href=&quot;#${fallback}&quot;/>'}))">`;
+  }
+
+  function toast(msg, isError = false) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.toggle('error', isError);
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
+  async function call(method, path, body, quiet = false) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (deviceId) headers['X-TS-Device'] = deviceId;
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+    try {
+      const r = await fetch(path, opts);
+      if (!r.ok) {
+        lastFail = r.status;
+        let detail = 'Error ' + r.status;
+        try { const j = await r.json(); if (j.detail) detail = j.detail; } catch {}
+        if (!quiet) toast(detail, true);
+        return null;
+      }
+      return r.json();
+    } catch (e) {
+      lastFail = 'server';
+      if (!quiet) toast('Server unreachable', true);
+      return null;
+    }
+  }
+  let lastFail = null;        // why the last call() failed: HTTP status, or 'server'
+
+  // ── Theme ───────────────────────────────────────────────────────────────────
+  const SUN = '<path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/>';
+  const MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  const AUTO = '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/>';
+  // Theme mode: 'auto' (follow the device), 'light' or 'dark'. The button cycles them.
+  // Kept under 'ts-theme-mode'. Before 1.2.0 every tap saved a fixed 'light'/'dark'
+  // under 'ts-theme', which kept installed apps from following the phone; that old
+  // key is ignored and removed, so everyone starts on auto again.
+  const THEME_NAMES = { auto: 'Theme: same as this device', light: 'Theme: light', dark: 'Theme: dark' };
+  const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  let themeMode = 'auto';
+  function applyTheme() {
+    const t = themeMode === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : themeMode;
+    document.documentElement.setAttribute('data-theme', t);
+    $('theme-icon').innerHTML = themeMode === 'auto' ? AUTO : (t === 'light' ? SUN : MOON);
+    $('theme-toggle').title = THEME_NAMES[themeMode];
+    // Status bar colour: per scheme in auto, else the forced theme's colour.
+    document.querySelectorAll('meta[name=theme-color]').forEach(m => {
+      m.content = themeMode === 'auto' ? m.dataset.auto : (t === 'light' ? '#f4f2ee' : '#1c1e24');
+    });
+  }
+  (function initTheme() {
+    try {
+      localStorage.removeItem('ts-theme');
+      themeMode = localStorage.getItem('ts-theme-mode') || 'auto';
+    } catch {}
+    if (!THEME_NAMES[themeMode]) themeMode = 'auto';
+    applyTheme();
+    darkQuery.addEventListener('change', () => { if (themeMode === 'auto') applyTheme(); });
+    // An installed app left in the background can miss that change; check on return.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && themeMode === 'auto') applyTheme();
+    });
+    $('theme-toggle').onclick = () => {
+      themeMode = { auto: 'light', light: 'dark', dark: 'auto' }[themeMode];
+      try { localStorage.setItem('ts-theme-mode', themeMode); } catch {}
+      applyTheme();
+      toast(THEME_NAMES[themeMode]);
+    };
+  })();
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  function setLib(lib) {
+    document.body.dataset.lib = lib;
+    document.querySelectorAll('.lib-tab').forEach(b => b.classList.toggle('active', b.dataset.lib === lib));
+    try { localStorage.setItem('ts-lib', lib); } catch {}
+    if (lib === 'search' && window.matchMedia('(min-width: 900px)').matches) $('search-input').focus();
+  }
+  function setView(view) {
+    document.body.dataset.view = view;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    if (view !== 'player') setLib(view);
+    window.scrollTo({ top: 0 });
+    if (view === 'player') { cancelAssign(); requestAnimationFrame(updateSegIndicator); }
+  }
+
+  // ── Controls ────────────────────────────────────────────────────────────────
+  async function key(name) { await call('POST', `/api/key/${name}`); setTimeout(refresh, 500); }
+
+  async function togglePlay() {
+    const playing = playStatus === 'PLAY_STATE';
+    setPlayIcons(!playing);   // show the change now; the next refresh confirms it
+    playStatus = playing ? 'PAUSE_STATE' : 'PLAY_STATE';
+    await key(playing ? 'PAUSE' : 'PLAY');
+  }
+
+  function onVolInput(v) {
+    $('vol-num').textContent = v;
+    $('vol-slider').style.setProperty('--pct', v + '%');
+  }
+
+  let volTimer, volBusyUntil = 0;
+  function setVol(v) {
+    volBusyUntil = Date.now() + 1500;
+    clearTimeout(volTimer);
+    volTimer = setTimeout(() => call('POST', '/api/volume', { level: +v }), 200);
+  }
+
+  async function selectSource(source, account) {
+    await call('POST', '/api/source', { source, account });
+    setTimeout(refresh, 600);
+  }
+
+  // ── Stations ────────────────────────────────────────────────────────────────
+  async function playStation(st) {
+    startTuning(st);
+    const ok = await call('POST', '/api/play', st);
+    if (!ok) { stopTuning(); refresh(); return; }
+    current = st;
+    await loadHistory();
+    setTimeout(refresh, 900);
+  }
+
+  // ── Tuning in ───────────────────────────────────────────────────────────────
+  // Show the chosen station straight away. Until the speaker reports it playing
+  // (or 15 s pass), refresh() leaves the name and logo alone.
+  let tuning = null;
+  function startTuning(st) {
+    tuning = { name: st.name, until: Date.now() + 15000 };
+    $('track-name').textContent = st.name;
+    $('track-sub').textContent = 'Tuning in…';
+    $('source-badge').textContent = SOURCE_LABELS.LOCAL_INTERNET_RADIO;
+    $('mp-name').textContent = st.name;
+    $('mp-sub').textContent = 'Tuning in…';
+    setArt(st.favicon || '');
+    // The previous station's song is gone: its cover can't be opened any more.
+    shownSong = null;
+    $('art-wrap').classList.remove('can-open');
+    ['role', 'tabindex', 'aria-label'].forEach(a => $('art-wrap').removeAttribute(a));
+    $('hero-card').classList.add('tuning');
+    $('hero-card').classList.remove('is-playing');
+    setPlayIcons(true);
+  }
+  function stopTuning() {
+    tuning = null;
+    $('hero-card').classList.remove('tuning');
+  }
+  function tuningDone(s) {
+    if (!tuning) return true;
+    const arrived = s.source === 'LOCAL_INTERNET_RADIO' && s.playStatus === 'PLAY_STATE' &&
+      (s.stationName === tuning.name || s.track === tuning.name);
+    if (arrived || Date.now() > tuning.until) { stopTuning(); return true; }
+    return false;
+  }
+
+  // ── Picking a station for an empty preset ───────────────────────────────────
+  let assignSlot = 0;
+  function startAssign(slot) {
+    assignSlot = slot;
+    document.body.classList.add('assigning');
+    $('assign-text').textContent = `Choose a station for preset ${slot}`;
+    markPicking();
+    if (window.matchMedia('(min-width: 900px)').matches) setLib('search');
+    else setView('search');
+    $('search-input').focus();
+  }
+  function cancelAssign() {
+    assignSlot = 0;
+    document.body.classList.remove('assigning');
+    markPicking();
+  }
+  function markPicking() {
+    document.querySelectorAll('#presets-grid .btn-preset')
+      .forEach(b => b.classList.toggle('picking', +b.dataset.slot === assignSlot));
+  }
+  async function assignStation(st) {
+    const slot = assignSlot;
+    cancelAssign();
+    const ok = await call('PUT', `/api/presets/${slot}`, { name: st.name, url: st.url, favicon: st.favicon || '' });
+    if (ok) { toast(`Saved to preset ${slot}`); await loadPresets(); }
+    if (!window.matchMedia('(min-width: 900px)').matches) setView('player');
+  }
+
+  async function toggleFavorite(st) {
+    if (!st) return;
+    const id = st.id || (await idFor(st));
+    if (favIds().has(id)) {
+      await call('DELETE', '/api/favorites/' + encodeURIComponent(id));
+      toast('Removed from favorites');
+    } else {
+      const saved = await call('POST', '/api/favorites', st);
+      if (saved) { st.id = saved.id; toast('Added to favorites'); }
+    }
+    await loadFavorites();
+  }
+
+  // Custom stream URLs have no radio-browser id; the server derives one from
+  // the URL, and the favorites list tells us which.
+  async function idFor(st) {
+    const f = favorites.find(f => f.url === st.url);
+    return f ? f.id : '';
+  }
+
+  function stationMeta(st) {
+    const q = [st.codec, st.bitrate ? st.bitrate + 'k' : ''].filter(Boolean).join(' ');
+    return [st.country, q, st.tags].filter(Boolean).join(' · ') || st.url;
+  }
+
+  // Under the station name: country, codec, tags; never the bare stream URL.
+  function heroMeta(st) {
+    if (!st) return '';
+    const m = stationMeta(st);
+    return m === st.url ? '' : m;
+  }
+
+  function isCurrent(st) {
+    return current && spk && spk.source === 'LOCAL_INTERNET_RADIO' && current.url === st.url;
+  }
+
+  function renderStations(container, list, emptyHtml) {
+    if (!list.length) { container.innerHTML = `<div class="empty">${emptyHtml}</div>`; return; }
+    const favs = favIds();
+    container.innerHTML = '<div class="list"></div>';
+    const wrap = container.firstChild;
+    list.forEach(st => {
+      const fav = favs.has(st.id) || favorites.some(f => f.url === st.url);
+      const row = document.createElement('div');
+      row.className = 'st-row' + (isCurrent(st) ? ' playing' : '');
+      row.innerHTML = `
+        <div class="st-logo">${logoHtml(st.favicon)}</div>
+        <div class="st-info"><div class="st-name">${esc(st.name)}</div><div class="st-meta">${esc(stationMeta(st))}</div></div>
+        <div class="st-acts">
+          <button class="st-act ${fav ? 'on' : ''}" data-act="fav" aria-label="${fav ? 'Remove from' : 'Add to'} favorites" title="${fav ? 'Remove from' : 'Add to'} favorites">${icon('i-heart')}</button>
+          <button class="st-act" data-act="preset" aria-label="Save to preset" title="Save to preset">${icon('i-pin')}</button>
+          <button class="st-act play" data-act="play" aria-label="Play ${esc(st.name)}" title="Play">${icon('i-play')}</button>
+        </div>`;
+      row.onclick = e => {
+        const act = e.target.closest('[data-act]')?.dataset.act || 'play';
+        if (assignSlot && act !== 'fav') assignStation(st);
+        else if (act === 'fav') toggleFavorite(st);
+        else if (act === 'preset') openPresetSheet(st);
+        else playStation(st);
+      };
+      wrap.appendChild(row);
+    });
+  }
+
+  // ── Search ──────────────────────────────────────────────────────────────────
+  let searchTimer, searchSeq = 0;
+  $('search-input').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => runSearch(false), 450);
+  });
+
+  async function runSearch(now) {
+    const q = $('search-input').value.trim();
+    const box = $('search-results');
+    if (/^https?:\/\//i.test(q)) {
+      lastResults = [{ id: '', name: 'Custom stream', url: q, favicon: '', country: '', tags: '', codec: '', bitrate: 0 }];
+      renderStations(box, lastResults, '');
+      return;
+    }
+    if (q.length < 2) { renderSearchIntro(); return; }
+    const seq = ++searchSeq;
+    box.innerHTML = '<div class="spinner" aria-label="Searching"></div>';
+    const res = await call('GET', '/api/search?q=' + encodeURIComponent(q));
+    if (seq !== searchSeq) return;   // a newer search is under way
+    lastResults = res || [];
+    renderStations(box, lastResults, `No stations found for <b>${esc(q)}</b>.<br>Try a shorter name, or paste the station's stream URL.`);
+  }
+
+  function renderSearchIntro() {
+    $('search-results').innerHTML = `<div class="empty">${icon('i-radio')}Search over 50,000 stations from <b>radio-browser.info</b><br>by name, e.g. <b>Europa Plus</b> or <b>BBC</b>.<br>You can also paste a stream URL to play it.</div>`;
+  }
+
+  // ── Favorites & history ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  async function loadFavorites() {
+    favorites = (await call('GET', '/api/favorites', null, true)) || [];
+    $('fav-count').textContent = favorites.length || '';
+    renderStations($('favorites-list'), [...favorites].reverse(),
+      `${icon('i-heart')}No favorites yet.<br>Tap the <b>heart</b> on any station to keep it here.`);
+    if (lastResults.length) renderStations($('search-results'), lastResults, '');
+    renderNowActions();
+  }
+
+  async function loadHistory() {
+    recentList = (await call('GET', '/api/history', null, true)) || [];
+    const box = $('recent-list');
+    renderStations(box, recentList, `${icon('i-clock')}Stations you play from this app show up here.`);
+    if (recentList.length) {
+      const foot = document.createElement('div');
+      foot.className = 'panel-foot';
+      foot.innerHTML = '<button class="link-btn">Clear history</button>';
+      foot.firstChild.onclick = async () => { await call('DELETE', '/api/history'); loadHistory(); };
+      box.appendChild(foot);
+    }
+  }
+
+  // ── Presets ─────────────────────────────────────────────────────────────────
+  function presetTile(i, p, extraClass = '') {
+    const btn = document.createElement('button');
+    btn.className = 'btn-preset ' + extraClass;
+    btn.dataset.slot = i;
+    const name = p && p.name ? p.name : 'Empty';
+    const plus = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+    btn.innerHTML = `<span class="pn">${i}</span>
+      <span class="pl">${p && p.source ? logoHtml(p.favicon) : plus}</span>
+      <span class="nm">${esc(name)}</span>`;
+    btn.setAttribute('aria-label', `Preset ${i}: ${name}`);
+    return btn;
+  }
+
+  async function loadPresets() {
+    const res = await call('GET', '/api/presets', null, true);
+    if (!res) return;
+    presets = res;
+    const grid = $('presets-grid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= 6; i++) {
+      const p = presets.find(x => +x.id === i);
+      const playing = p && spk && spk.source === 'LOCAL_INTERNET_RADIO' &&
+        (current && p.url ? p.url === current.url : spk.stationName === p.name);
+      const filled = p && p.source;
+      const btn = presetTile(i, p, playing ? 'current' : (filled ? '' : 'unset'));
+      if (filled) btn.onclick = () => {
+        if (p.name) startTuning({ name: p.name, favicon: p.favicon || '' });
+        key(`PRESET_${i}`);
+      };
+      else {
+        btn.onclick = () => startAssign(i);
+        btn.setAttribute('aria-label', `Preset ${i}: empty. Choose a station for it`);
+      }
+      grid.appendChild(btn);
+    }
+    markPicking();
+  }
+
+  let sheetStation = null;
+  function openPresetSheet(st) {
+    if (!st) return;
+    sheetStation = st;
+    $('sheet-station').textContent = st.name;
+    const grid = $('sheet-grid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= 6; i++) {
+      const btn = presetTile(i, presets.find(x => +x.id === i));
+      btn.onclick = () => savePreset(i);
+      grid.appendChild(btn);
+    }
+    $('preset-sheet').showModal();
+  }
+  function closeSheet() { $('preset-sheet').close(); }
+  $('preset-sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
+
+  async function savePreset(slot) {
+    const st = sheetStation;
+    closeSheet();
+    const ok = await call('PUT', `/api/presets/${slot}`, { name: st.name, url: st.url, favicon: st.favicon || '' });
+    if (ok) { toast(`Saved to preset ${slot}`); loadPresets(); }
+  }
+
+  // ── Now playing ─────────────────────────────────────────────────────────────
+  // The speaker only reports a station name, so match it against what we know.
+  function resolveCurrent(s) {
+    if (s.source !== 'LOCAL_INTERNET_RADIO') return null;
+    const name = s.stationName || s.track;
+    if (current && current.name === name) return current;
+    const fromPresets = presets.filter(p => p.url).map(p => ({ id: '', name: p.name, url: p.url, favicon: p.favicon }));
+    const known = [...recentList, ...favorites, ...fromPresets];
+    return known.find(st => st.name === name) || null;
+  }
+
+  function renderNowActions() {
+    const show = !!current;
+    $('now-fav').hidden = !show;
+    $('now-preset').hidden = !show;
+    if (show) {
+      const fav = favorites.some(f => f.url === current.url);
+      $('now-fav').classList.toggle('on', fav);
+      $('now-fav').querySelector('span').textContent = fav ? 'Favorited' : 'Favorite';
+    }
+  }
+
+  function setPlayIcons(isPlaying) {
+    document.querySelectorAll('.play-icon use').forEach(u => u.setAttribute('href', isPlaying ? '#i-pause' : '#i-play'));
+  }
+
+  const SOURCE_LABELS = { LOCAL_INTERNET_RADIO: 'Internet radio', SPOTIFY: 'Spotify', BLUETOOTH: 'Bluetooth',
+    AUX: 'AUX', PRODUCT: 'TV / Optical', STANDBY: 'Standby', INVALID_SOURCE: 'Idle', AIRPLAY: 'AirPlay' };
+
+  // Skip buttons only make sense where there are tracks to skip.
+  const TRACK_SOURCES = new Set(['SPOTIFY', 'BLUETOOTH', 'AIRPLAY', 'STORED_MUSIC', 'STORED_MUSIC_MEDIA_RENDERER',
+    'UPNP', 'DEEZER', 'AMAZON', 'PANDORA', 'QPLAY']);
+
+  // Unreachable only after two failed polls in a row (one can be a hiccup),
+  // or at once if this speaker hasn't answered since the page loaded.
+  let failCount = 0, everOnline = false;
+  async function refresh() {
+    const s = await call('GET', '/api/status', null, true);
+    if (!s) {
+      failCount++;
+      if (failCount >= 2 || !everOnline) setOffline(true);
+      return;
+    }
+    failCount = 0;
+    everOnline = true;
+    setOffline(false);
+    if (sourcesFor !== deviceId) loadSources();
+
+    const prevName = spk && spk.stationName;
+    spk = s;
+    playStatus = s.playStatus;
+    current = resolveCurrent(s);
+
+    if (tuningDone(s)) {
+      // Internet radio with a known song: the station moves to the badge, the song
+      // takes the title, and its cover (if found) the art, with the station logo on it.
+      const song = s.source === 'LOCAL_INTERNET_RADIO' && s.song ? s.song : null;
+      const stationArt = s.art || (current && current.favicon) || '';
+      const stationName = s.stationName || (current && current.name) || '';
+      let name, sub, badge;
+      if (song) {
+        name = song.title;
+        sub = song.artist || stationName;
+        badge = stationName || SOURCE_LABELS[s.source];
+      } else {
+        name = s.track || s.stationName || SOURCE_LABELS[s.source] || s.source || '—';
+        sub = s.source === 'LOCAL_INTERNET_RADIO'
+          ? (s.track && s.stationName && s.track !== s.stationName ? s.stationName : heroMeta(current))
+          : [s.artist, s.album].filter(Boolean).join(' · ');
+        badge = SOURCE_LABELS[s.source] || s.source || '—';
+      }
+      const songKey = song ? song.artist + '\n' + song.title : '';
+      if (songKey !== lastSongKey) {
+        lastSongKey = songKey;
+        ['track-name', 'track-sub'].forEach(id => {
+          const el = $(id);
+          el.classList.remove('song-in'); void el.offsetWidth; el.classList.add('song-in');
+        });
+      }
+      $('track-name').textContent = name;
+      $('track-sub').textContent = sub;
+      $('source-badge').textContent = badge;
+      $('mp-name').textContent = name;
+      $('mp-sub').textContent = song ? (song.artist ? `${song.artist} · ${stationName}` : stationName)
+                                     : (SOURCE_LABELS[s.source] || '');
+      if (song && song.cover && !badCovers.has(song.cover)) setArt(song.cover, { cover: true, badge: stationArt });
+      else setArt(stationArt);
+      shownSong = song ? { ...song, cover: badCovers.has(song.cover) ? '' : song.cover, station: stationName, stationArt } : null;
+      const aw = $('art-wrap');
+      aw.classList.toggle('can-open', !!shownSong);
+      if (shownSong) { aw.setAttribute('role', 'button'); aw.tabIndex = 0; aw.setAttribute('aria-label', 'Show the cover large, and share this song'); }
+      else { aw.removeAttribute('role'); aw.removeAttribute('tabindex'); aw.removeAttribute('aria-label'); }
+      const isPlaying = s.playStatus === 'PLAY_STATE' || s.playStatus === 'BUFFERING_STATE';
+      setPlayIcons(isPlaying);
+      $('hero-card').classList.toggle('is-playing', s.playStatus === 'PLAY_STATE');
+    }
+    $('miniplayer').classList.toggle('has-source', !['STANDBY', 'INVALID_SOURCE', ''].includes(s.source));
+    document.querySelectorAll('.transport .skip').forEach(b => { b.hidden = !TRACK_SOURCES.has(s.source); });
+
+    if (Date.now() > volBusyUntil) {
+      const vol = parseInt(s.volume) || 0;
+      $('vol-slider').value = vol;
+      onVolInput(vol);
+    }
+    const muted = s.muted === 'true';
+    $('btn-mute').classList.toggle('muted', muted);
+    $('mute-icon').innerHTML = muted
+      ? '<path d="M11 5 6 9H2v6h4l5 4z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+      : '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>';
+
+    markActiveSource(s.source);
+    renderNowActions();
+    renderSleep(s.sleep || null);
+    renderAlarm(s.alarm || null);
+    if (prevName !== s.stationName) {
+      loadPresets();
+      document.querySelectorAll('.st-row').forEach(r => r.classList.remove('playing'));
+    }
+  }
+
+  function setOffline(off) {
+    $('dot').classList.toggle('offline', off);
+    document.body.classList.toggle('spk-offline', off);
+    $('hero-card').classList.toggle('offline', off);
+    if (!off) return;
+    stopTuning();
+    setPlayIcons(false);
+    $('hero-card').classList.remove('is-playing');
+    $('miniplayer').classList.remove('has-source');
+    const d = devices.find(x => x.id === deviceId);
+    if (lastFail === 'server') {
+      $('off-title').textContent = 'Server unreachable';
+      $('off-text').textContent = "This app can't reach the TouchingSounds server. Check this device's internet connection.";
+    } else {
+      $('off-title').textContent = `${d ? d.name : 'The speaker'} is unreachable`;
+      $('off-text').textContent = 'It may be switched off or off Wi-Fi, or the network link to it may be down. ' +
+        'The app keeps trying every few seconds.';
+    }
+  }
+
+  async function retryNow() {
+    const b = $('btn-retry');
+    b.disabled = true; b.textContent = 'Trying…';
+    failCount = 1;   // one more failure keeps it marked unreachable
+    await refresh();
+    b.disabled = false; b.textContent = 'Try again';
+    if (document.body.classList.contains('spk-offline')) toast('Still unreachable', true);
+  }
+
+  // ── Sources ─────────────────────────────────────────────────────────────────
+  // Only the inputs this device actually has (the SoundTouch 20 has no TV input).
+  // Bluetooth is listed as UNAVAILABLE while nothing is connected, but selecting
+  // it still works, so a source shows whenever the device lists it.
+  const SWITCHABLE = [['AUX', 'AUX', 'AUX'], ['BLUETOOTH', 'Bluetooth', ''], ['PRODUCT', 'TV / Optical', 'TV']];
+  let sourcesFor = '';
+  async function loadSources() {
+    const forDevice = deviceId;
+    const list = await call('GET', '/api/sources', null, true);
+    if (!list || forDevice !== deviceId) return;   // tried again after the next good refresh
+    sourcesFor = forDevice;
+    const have = new Map(list.map(x => [x.source, x]));
+    const seg = $('segmented');
+    seg.querySelectorAll('.seg-btn').forEach(b => b.remove());
+    const avail = SWITCHABLE.filter(([src]) => have.has(src));
+    for (const [src, label, acct] of avail) {
+      const b = document.createElement('button');
+      b.className = 'seg-btn';
+      b.id = 'src-' + src;
+      b.textContent = label;
+      b.onclick = () => selectSource(src, have.get(src).account || acct);
+      seg.appendChild(b);
+    }
+    seg.style.setProperty('--n', avail.length || 1);
+    $('source-card').hidden = !avail.length;
+    markActiveSource(spk && spk.source);
+  }
+
+  function markActiveSource(source) {
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.id === 'src-' + source));
+    updateSegIndicator();
+  }
+
+  // ── Station logo: plate and tint ────────────────────────────────────────────
+  // Reads the logo (same origin, via /api/art) to pick the plate behind it and
+  // the colour of the player's glow.
+  let lastArtKey = null, artSeq = 0, lastSongKey = '';
+  const badCovers = new Set();   // covers that failed to load: don't retry on every poll
+  // opts.cover: `url` is a song cover (fills the box); opts.badge: the station logo,
+  // shown in the corner badge, and used instead if the cover doesn't load.
+  function setArt(url, opts = {}) {
+    const key = url + '|' + (opts.cover ? opts.badge || '' : '');
+    if (key === lastArtKey) return;
+    lastArtKey = key;
+    const seq = ++artSeq;
+    const hero = $('hero-card'), boxes = [$('art'), $('mp-art')];
+    const fallback = () => {
+      if (seq !== artSeq) return;
+      if (opts.cover) { badCovers.add(url); setArt(opts.badge || ''); return; }
+      setBadge('', seq);
+      boxes.forEach(b => { b.classList.remove('has-logo', 'is-cover'); b.style.removeProperty('--plate'); b.innerHTML = icon('i-note'); });
+      hero.style.removeProperty('--tint');
+    };
+    if (!url) { fallback(); return; }
+    const img = new Image();
+    img.onload = () => {
+      if (seq !== artSeq) return;
+      const a = analyseLogo(img);
+      if (a.tint) hero.style.setProperty('--tint', a.tint); else hero.style.removeProperty('--tint');
+      boxes.forEach(b => {
+        b.classList.add('has-logo');
+        b.classList.toggle('is-cover', !!opts.cover);
+        b.style.setProperty('--plate', opts.cover ? 'transparent' : a.plate);
+        const el = img.cloneNode();
+        el.alt = '';
+        if (!opts.cover) {
+          if (a.small) { el.classList.add('small'); el.style.setProperty('--logo-w', Math.round(Math.max(64, img.naturalWidth * 1.5)) + 'px'); }
+          else if (a.padded) el.classList.add('padded');
+        }
+        b.replaceChildren(el);
+      });
+      setBadge(opts.cover ? opts.badge : '', seq);
+    };
+    img.onerror = fallback;
+    img.src = artUrl(url);
+  }
+
+  // The station logo in the corner of a song cover.
+  function setBadge(url, seq) {
+    const stb = $('st-badge');
+    if (!url) { stb.classList.remove('show'); stb.replaceChildren(); return; }
+    const img = new Image();
+    img.onload = () => {
+      if (seq !== artSeq) return;
+      stb.style.setProperty('--plate', analyseLogo(img).plate);
+      img.alt = '';
+      stb.replaceChildren(img);
+      stb.classList.add('show');
+    };
+    img.onerror = () => { if (seq === artSeq) stb.classList.remove('show'); };
+    img.src = artUrl(url);
+  }
+
+  // ── Cover viewer & sharing ──────────────────────────────────────────────────
+  // Tap the art while a song shows: the cover full screen, with Share (the phone's
+  // share sheet, cover image included where the browser allows files), WhatsApp
+  // (text), and search links to find the song. It keeps the song that was tapped,
+  // even if the radio moves on meanwhile.
+  let shownSong = null, viewSong = null, viewFile = null;
+
+  // The feeds and search APIs give ~400-600 px; the same CDNs serve 1000 px.
+  function bigCover(u) {
+    return u.replace(/\/400x400\//, '/1000x1000/')                    // Power group
+            .replace(/\/500x500-(\w+-\d+-\d+-\d+)\.jpg/, '/1000x1000-$1.jpg') // Deezer
+            .replace(/\/600x600bb\./, '/1000x1000bb.');                  // iTunes
+  }
+  const songText = v => [v.title, v.artist].filter(Boolean).join(' — ');
+  const findLinks = v => {
+    const q = encodeURIComponent([v.artist, v.title].filter(Boolean).join(' '));
+    return [
+      ['Spotify', `https://open.spotify.com/search/${q}`],
+      ['YouTube', `https://www.youtube.com/results?search_query=${q}`],
+      ['Apple Music', `https://music.apple.com/search?term=${q}`],
+    ];
+  };
+  function shareMessage(v) {
+    return `🎵 ${songText(v)}${v.station ? `\n📻 on ${v.station}` : ''}\n▶ ${findLinks(v)[1][1]}`;
+  }
+
+  function openCover() {
+    if (!shownSong) return;
+    const v = viewSong = { ...shownSong };
+    viewFile = null;
+    $('cv-title').textContent = v.title;
+    $('cv-artist').textContent = v.artist || '';
+    $('cv-station').textContent = v.station ? `on ${v.station}` : '';
+    const box = $('cv-art');
+    box.classList.toggle('logo', !v.cover);
+    box.innerHTML = '';
+    const src = v.cover || v.stationArt;
+    $('cv-bg').style.backgroundImage = src ? `url("${artUrl(v.cover || v.stationArt)}")` : 'none';
+    if (src) {
+      const img = new Image();
+      img.alt = songText(v);
+      const small = artUrl(src), big = v.cover ? artUrl(bigCover(v.cover)) : small;
+      img.src = small;                       // already cached: shows at once
+      box.appendChild(img);
+      if (big !== small) {
+        const hi = new Image();
+        hi.onload = () => { if (viewSong === v) img.src = big; };
+        hi.src = big;
+      }
+      // Fetch the image now, so Share can hand it over straight from the tap
+      // (iOS only allows the share sheet right after a tap, not after a download).
+      if (v.cover && navigator.canShare) {
+        const name = songText(v).replace(/[^\p{L}\p{N} _-]+/gu, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'cover';
+        const get = url => fetch(url).then(r => r.ok ? r.blob() : Promise.reject());
+        get(big).catch(() => get(small)).then(b => {
+          const f = new File([b], name + (b.type === 'image/png' ? '.png' : '.jpg'), { type: b.type || 'image/jpeg' });
+          if (viewSong === v && navigator.canShare({ files: [f] })) viewFile = f;
+        }).catch(() => {});
+      }
+    } else box.innerHTML = icon('i-note');
+    const find = $('cv-find');
+    find.innerHTML = '<span>Find this song</span>' + findLinks(v)
+      .map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${n}</a>`).join('');
+    $('cv-share-label').textContent = navigator.share ? 'Share' : 'Copy';
+    $('cover-view').showModal();
+    $('cv-share').focus();
+  }
+  function closeCover() { $('cover-view').close(); }
+  $('art-wrap').addEventListener('click', openCover);
+  $('art-wrap').addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && shownSong) { e.preventDefault(); openCover(); }
+  });
+  $('cover-view').addEventListener('click', e => {
+    if (e.target.id === 'cv-inner' || e.target.id === 'cover-view') closeCover();
+  });
+  $('cover-view').addEventListener('close', () => { viewSong = null; viewFile = null; });
+  // Swipe down to close, as with photo viewers.
+  (() => {
+    let y0 = null;
+    const el = $('cover-view');
+    el.addEventListener('touchstart', e => { y0 = e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (y0 !== null && e.changedTouches[0].clientY - y0 > 90 && $('cv-inner').scrollTop <= 0) closeCover();
+      y0 = null;
+    });
+  })();
+
+  async function shareSong() {
+    const v = viewSong;
+    if (!v) return;
+    const text = shareMessage(v);
+    if (navigator.share) {
+      const data = viewFile ? { files: [viewFile], text } : { title: songText(v), text };
+      try { await navigator.share(data); }
+      catch (e) {
+        if (e.name === 'AbortError') return;                  // closed the share sheet
+        try { await navigator.share({ title: songText(v), text }); } catch {}   // without the image
+      }
+      return;
+    }
+    try { await navigator.clipboard.writeText(text); toast('Copied: paste it anywhere'); }
+    catch { toast('Copy failed', true); }
+  }
+  function shareWhatsApp() {
+    if (!viewSong) return;
+    window.open('https://wa.me/?text=' + encodeURIComponent(shareMessage(viewSong)), '_blank', 'noopener');
+  }
+
+  // ── Alarms ──────────────────────────────────────────────────────────────────
+  // Run on the server (app/alarm.py); times are wall-clock in the phone's zone.
+  const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];   // server: 0 = Monday
+  const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
+  let alarms = [], editingAlarm = null, afDays = new Set();
+
+  function daysText(days) {
+    if (!days || !days.length) return 'Once';
+    if (days.length === 7) return 'Every day';
+    const k = days.join();
+    if (k === '0,1,2,3,4') return 'Weekdays';
+    if (k === '5,6') return 'Weekends';
+    if (days.length === 6) return `Every day but ${DAY_NAMES.find((_, d) => !days.includes(d))}`;
+    return days.map(d => DAY_NAMES[d]).join(' ');
+  }
+  // epoch seconds → "today 07:00", "tomorrow 07:00", "Mon 07:00"
+  function whenText(at) {
+    const d = new Date(at * 1000), now = new Date();
+    const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const day0 = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day0(d) - day0(now)) / 86400000);
+    if (diff === 0) return `today ${hm}`;
+    if (diff === 1) return `tomorrow ${hm}`;
+    if (diff === -1) return `yesterday ${hm}`;
+    if (Math.abs(diff) < 7) return `${d.toLocaleDateString([], { weekday: 'short' })} ${hm}`;
+    return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${hm}`;
+  }
+  const deviceLabel = () => $('device-name').textContent || 'the speaker';
+
+  function renderAlarm(sum) {
+    const b = $('btn-alarm'), nx = sum && sum.next, bad = sum && sum.problem;
+    b.classList.toggle('on', !!nx);
+    b.classList.toggle('problem', !!bad);
+    $('alarm-at').textContent = nx ? nx.time : '';
+    let label = nx ? `Next alarm: ${whenText(nx.at)}` : 'Alarms';
+    if (bad) label += `. Last alarm didn't play: ${bad.msg}`;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    if (bad) {
+      const k = deviceId + '|' + bad.at;
+      let seen = '';
+      try { seen = localStorage.getItem('ts-alarm-problem') || ''; } catch {}
+      if (seen !== k) {
+        try { localStorage.setItem('ts-alarm-problem', k); } catch {}
+        toast(`The ${whenText(bad.at)} alarm didn't play: ${bad.msg}`, true);
+      }
+    }
+  }
+
+  async function openAlarmSheet() {
+    const r = await call('GET', '/api/alarms');
+    if (!r) return;
+    alarms = r;
+    showAlarmList();
+    $('alarm-sheet').showModal();
+  }
+  $('alarm-sheet').addEventListener('click', e => { if (e.target === e.currentTarget) $('alarm-sheet').close(); });
+
+  function showAlarmList() {
+    $('alarm-form').hidden = true;
+    $('alarm-listview').hidden = false;
+    $('alarm-text').textContent = alarms.length
+      ? `On ${deviceLabel()}. Tap an alarm to change it.`
+      : `Wake up to a station on ${deviceLabel()}, even with the phone locked or the app closed.`;
+    const box = $('alarm-list');
+    box.innerHTML = alarms.length ? '' : '<div class="alarm-empty">No alarms yet.</div>';
+    alarms.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'alarm-row' + (a.enabled ? '' : ' off');
+      let last = '';
+      if (a.ringing) last = '<span class="last ring">Ringing now</span>';
+      else if (a.last) last = a.last.ok
+        ? `<span class="last">${esc(whenText(a.last.at))}: ${esc(a.last.msg)}</span>`
+        : `<span class="last bad">${esc(whenText(a.last.at))}: ${esc(a.last.msg)}</span>`;
+      const when = a.enabled && a.next ? ` · ${whenText(a.next)}` : (a.enabled ? '' : ' · off');
+      row.innerHTML = `<button class="ar-main"><span class="at">${esc(a.time)}</span>
+        <span class="info"><span class="d">${esc(daysText(a.days) + when)}</span>
+        <span class="s">${esc(a.station.name)} · volume ${a.volume}</span>${last}</span></button>
+        <label class="switch"><input type="checkbox" ${a.enabled ? 'checked' : ''}
+          aria-label="Alarm ${esc(a.time)} on"><span></span></label>`;
+      row.querySelector('.ar-main').onclick = () => editAlarm(a);
+      row.querySelector('input').onchange = async e => {
+        const r = await call('PUT', `/api/alarms/${a.id}`, { enabled: e.target.checked });
+        if (!r) { e.target.checked = !e.target.checked; return; }
+        Object.assign(a, r);
+        showAlarmList();
+        if (r.enabled && r.next) toast(`Alarm ${whenText(r.next)}`);
+        refresh();
+      };
+      box.appendChild(row);
+    });
+  }
+
+  // Stations to wake up to: presets, favorites, recent (and the alarm's own, if it's none of those).
+  function fillStations(chosen) {
+    const sel = $('af-station'), list = [], seen = new Set();
+    sel.innerHTML = '';
+    const group = (label, items) => {
+      const og = document.createElement('optgroup');
+      og.label = label;
+      items.forEach(st => {
+        if (!st || !st.url || seen.has(st.url)) return;
+        seen.add(st.url);
+        const o = document.createElement('option');
+        o.value = list.length;
+        o.textContent = st.name;
+        list.push({ name: st.name, url: st.url, favicon: st.favicon || '' });
+        og.appendChild(o);
+      });
+      if (og.children.length) sel.appendChild(og);
+    };
+    if (chosen) group('This alarm', [chosen]);
+    group('Presets', [...presets].sort((x, y) => x.id - y.id).map(p => p.url ? p : null));
+    group('Favorites', [...favorites].reverse());
+    group('Recent', recentList);
+    sel._list = list;
+    const pick = chosen ? chosen.url : (current && current.url) || '';
+    const i = list.findIndex(st => st.url === pick);
+    sel.value = String(i >= 0 ? i : 0);
+    return list.length > 0;
+  }
+
+  function paintDays() {
+    const box = $('af-days');
+    box.innerHTML = '';
+    DAY_NAMES.forEach((n, d) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = n.slice(0, 2);
+      btn.setAttribute('aria-label', n);
+      btn.setAttribute('aria-pressed', afDays.has(d));
+      btn.classList.toggle('on', afDays.has(d));
+      btn.onclick = () => { afDays.has(d) ? afDays.delete(d) : afDays.add(d); paintDays(); };
+      box.appendChild(btn);
+    });
+    $('af-hint').textContent = afDays.size
+      ? `${daysText([...afDays].sort())}.`
+      : 'No days picked: rings once, then switches itself off.';
+  }
+
+  function editAlarm(a) {
+    editingAlarm = a;
+    $('af-title').textContent = a ? 'Change alarm' : 'New alarm';
+    $('af-time').value = a ? a.time : '07:00';
+    afDays = new Set(a ? a.days : [0, 1, 2, 3, 4]);
+    paintDays();
+    if (!fillStations(a ? a.station : null)) {
+      toast('Play a station or save a preset first, then set an alarm for it', true);
+      return;
+    }
+    const vol = a ? a.volume : Math.min(40, Math.max(15, +(spk && spk.volume) || 25));
+    $('af-vol').value = vol;
+    $('af-vol-num').textContent = vol;
+    $('af-delete').hidden = !a;
+    $('alarm-listview').hidden = true;
+    $('alarm-form').hidden = false;
+  }
+
+  async function saveAlarm(e, ringNow = false) {
+    if (e) e.preventDefault();
+    if (!$('af-time').value) { $('af-time').focus(); return; }
+    const sel = $('af-station');
+    const body = {
+      time: $('af-time').value, days: [...afDays].sort(), station: sel._list[+sel.value],
+      volume: +$('af-vol').value, tz: TZ, enabled: true,
+    };
+    const r = editingAlarm
+      ? await call('PUT', `/api/alarms/${editingAlarm.id}`, body)
+      : await call('POST', '/api/alarms', body);
+    if (!r) return;
+    editingAlarm = r;
+    alarms = (await call('GET', '/api/alarms', null, true)) || alarms;
+    if (ringNow) {
+      if (!await call('POST', `/api/alarms/${r.id}/test`)) return;
+      $('alarm-sheet').close();
+      toast('Ringing now: it gets louder over a minute and a half');
+    } else {
+      showAlarmList();
+      toast(r.next ? `Alarm ${whenText(r.next)}` : 'Alarm saved');
+    }
+    refresh();
+  }
+
+  async function deleteAlarm() {
+    if (!editingAlarm) return;
+    if (!await call('DELETE', `/api/alarms/${editingAlarm.id}`)) return;
+    alarms = alarms.filter(a => a.id !== editingAlarm.id);
+    editingAlarm = null;
+    showAlarmList();
+    toast('Alarm deleted');
+    refresh();
+  }
+
+  // ── Sleep timer ─────────────────────────────────────────────────────────────
+  const SLEEP_OPTIONS = [15, 30, 45, 60, 90, 120];
+  let sleepState = null, sleepSeenAt = 0;   // /api/status "sleep", and when we got it
+  function sleepLeft() {
+    return sleepState ? Math.max(0, sleepState.remaining - (Date.now() - sleepSeenAt) / 1000) : 0;
+  }
+  function fmtSleep(sec) {
+    const m = Math.ceil(sec / 60);
+    return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m`;
+  }
+  const sleepWords = sec => fmtSleep(sec).replace(/m$/, ' min');
+  function renderSleep(st) {
+    sleepState = st;
+    sleepSeenAt = Date.now();
+    paintSleep();
+  }
+  function paintSleep() {
+    const left = sleepLeft(), on = left > 0, b = $('btn-sleep');
+    b.classList.toggle('on', on);
+    $('sleep-left').textContent = on ? fmtSleep(left) : '';
+    const label = on ? `Sleep timer: standby in ${sleepWords(left)}` : 'Sleep timer';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+  }
+  setInterval(paintSleep, 10000);
+  function openSleepSheet() {
+    const on = sleepLeft() > 0;
+    $('sleep-text').textContent = on
+      ? `Standby in ${sleepWords(sleepLeft())}. Pick a new time, or turn it off.`
+      : 'The speaker fades out over the last minute, then switches to standby.';
+    $('sleep-off').hidden = !on;
+    const grid = $('sleep-grid');
+    grid.innerHTML = '';
+    SLEEP_OPTIONS.forEach(m => {
+      const btn = document.createElement('button');
+      btn.innerHTML = m < 60 ? `${m}<span>min</span>` : `${m / 60}<span>${m === 60 ? 'hour' : 'hours'}</span>`;
+      if (on && sleepState.minutes === m) btn.classList.add('on');
+      btn.onclick = () => setSleep(m);
+      grid.appendChild(btn);
+    });
+    $('sleep-sheet').showModal();
+  }
+  $('sleep-sheet').addEventListener('click', e => { if (e.target === e.currentTarget) $('sleep-sheet').close(); });
+  async function setSleep(minutes) {
+    $('sleep-sheet').close();
+    const r = await call('POST', '/api/sleep', { minutes });
+    if (!r) return;
+    renderSleep(r.sleep);
+    toast(minutes ? `Standby in ${sleepWords(minutes * 60)}` : 'Sleep timer off');
+  }
+
+  function analyseLogo(img) {
+    const out = { plate: '#ececef', tint: '', small: img.naturalWidth > 0 && img.naturalWidth < 128, padded: true };
+    try {
+      const N = 40, c = document.createElement('canvas');
+      c.width = c.height = N;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, N, N);
+      const d = ctx.getImageData(0, 0, N, N).data;
+      const px = (x, y) => { const i = (y * N + x) * 4; return [d[i], d[i + 1], d[i + 2], d[i + 3]]; };
+      // Opaque, evenly coloured corners: the logo has its own background, so use it as the plate.
+      const corners = [px(1, 1), px(N - 2, 1), px(1, N - 2), px(N - 2, N - 2)];
+      const spread = k => Math.max(...corners.map(p => p[k])) - Math.min(...corners.map(p => p[k]));
+      if (corners.every(p => p[3] > 240) && spread(0) < 40 && spread(1) < 40 && spread(2) < 40) {
+        const avg = k => Math.round(corners.reduce((t, p) => t + p[k], 0) / 4);
+        out.plate = `rgb(${avg(0)} ${avg(1)} ${avg(2)})`;
+        out.padded = false;
+      }
+      // Tint: the average of the clearly coloured pixels, weighted by saturation.
+      let r = 0, g = 0, b = 0, w = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 200) continue;
+        const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        const sat = mx ? (mx - mn) / mx : 0;
+        if (sat < 0.3 || mx < 60) continue;
+        r += d[i] * sat; g += d[i + 1] * sat; b += d[i + 2] * sat; w += sat; n++;
+      }
+      if (n > N * N * 0.03) {
+        const rgb = `${Math.round(r / w)} ${Math.round(g / w)} ${Math.round(b / w)}`;
+        out.tint = `rgb(${rgb} / .6)`;
+        // A transparent logo gets a light plate with a hint of its own colour.
+        if (out.padded) out.plate = `color-mix(in srgb, rgb(${rgb}) 8%, #f1f1f3)`;
+      }
+    } catch {}
+    return out;
+  }
+
+  function updateSegIndicator() {
+    const active = document.querySelector('.seg-btn.active');
+    const indicator = $('seg-indicator');
+    if (!active) { indicator.style.opacity = '0'; return; }
+    indicator.style.opacity = '1';
+    const i = Array.from(active.parentElement.querySelectorAll('.seg-btn')).indexOf(active);
+    indicator.style.transform = `translateX(${i * 100}%)`;
+  }
+
+  // ── Devices ─────────────────────────────────────────────────────────────────
+  // Presets and the player follow the selected speaker; favorites, recent and
+  // search are shared.
+  async function loadDevices() {
+    devices = (await call('GET', '/api/devices', null, true)) || [];
+    let saved = '';
+    try { saved = localStorage.getItem('ts-device') || ''; } catch {}
+    const pick = devices.find(d => d.id === saved) || devices.find(d => d.primary) || devices[0];
+    deviceId = pick ? pick.id : '';
+    renderDevicePicker();
+  }
+
+  function renderDevicePicker() {
+    const d = devices.find(x => x.id === deviceId);
+    $('device-name').textContent = d ? d.name : 'SoundTouch';
+    const btn = $('device-btn');
+    btn.disabled = false;
+    btn.title = d ? `${d.name} · ${d.type}` : '';
+    $('device-menu').innerHTML = devices.map(x => `
+      <button class="device-opt ${x.id === deviceId ? 'selected' : ''}" role="menuitemradio" aria-checked="${x.id === deviceId}" data-id="${esc(x.id)}">
+        <span class="dot ${x.online ? '' : 'offline'}"></span>
+        <span><div class="do-name">${esc(x.name)}</div><div class="do-type">${esc(x.type || x.id)}${x.online ? '' : ' · offline'}</div></span>
+        ${x.id === deviceId ? '<svg class="do-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' : ''}
+      </button>`).join('') + `
+      <div class="dm-sep" role="separator"></div>
+      <button class="device-opt dm-add" role="menuitem" data-wizard="1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Add or manage speakers</span>
+      </button>`;
+  }
+
+  function toggleDeviceMenu(open) {
+    const menu = $('device-menu');
+    const show = open ?? menu.hidden;
+    menu.hidden = !show;
+    $('device-btn').setAttribute('aria-expanded', String(show));
+    if (show) call('GET', '/api/devices', null, true).then(list => { if (list) { devices = list; renderDevicePicker(); } });
+  }
+
+  async function selectDevice(id) {
+    toggleDeviceMenu(false);
+    if (id === deviceId) return;
+    deviceId = id;
+    try { localStorage.setItem('ts-device', id); } catch {}
+    renderDevicePicker();
+    spk = null; current = null; presets = [];
+    failCount = 0; everOnline = false; sourcesFor = '';
+    cancelAssign(); stopTuning(); renderSleep(null); renderAlarm(null);
+    $('presets-grid').innerHTML = '';
+    $('source-card').hidden = true;
+    await refresh();
+    await loadPresets();
+    const d = devices.find(x => x.id === id);
+    if (d) toast('Now controlling ' + d.name);
+  }
+
+  $('device-btn').addEventListener('click', e => { e.stopPropagation(); toggleDeviceMenu(); });
+  $('device-menu').addEventListener('click', e => {
+    const opt = e.target.closest('.device-opt');
+    if (opt && opt.dataset.wizard) wz.open(devices.length > 1 ? 'speakers' : 'find');
+    else if (opt) selectDevice(opt.dataset.id);
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.device-picker')) toggleDeviceMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleDeviceMenu(false); });
+
+  // ── Speakers wizard (1.5) ──────────────────────────────────────────────────
+  // Add a speaker, change a speaker's Wi-Fi, remove one.  Three ways in,
+  // easiest first: already on Wi-Fi (found, tap Add); on a cable (the speaker
+  // scans for Wi-Fi itself, server-side); no cable (setup mode, and the phone
+  // hands the Wi-Fi details over).  After Wi-Fi the server takes over on its
+  // own (app/setup.py): console redirect, restart, then name, presets and a
+  // test sound.
+  const WZ_I = {
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1"/></svg>',
+    cable: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="7" rx="1.5"/><path d="M10 5h4M12 9v5a4 4 0 0 1-4 4H5M5 15v6"/></svg>',
+    buttons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="3"/><circle cx="8" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/></svg>',
+  };
+
+  // Setup mode per model: the buttons as they sit on the device, what to do,
+  // and the light to wait for.  Key boxes are [label, x, y, w, h] in the
+  // drawing's own units; `hold` names the keys to highlight.  Sources: Bose's
+  // reset pages for the SoundTouch 20 II/III, 30 and 300 (a soundbar); the
+  // SoundTouch 30, 10 and Link Adapter drawings still need checking against a
+  // real unit (`check`).
+  const ST20_KEYS = {
+    w: 300, h: 150, caps: [['PRESETS', 110, 140], ['VOLUME', 250, 140]],
+    seps: [[212, 22, 212, 118]],
+    keys: [['1', 24, 22, 52, 42], ['2', 84, 22, 52, 42], ['3', 144, 22, 52, 42],
+           ['4', 24, 76, 52, 42], ['5', 84, 76, 52, 42], ['6', 144, 76, 52, 42],
+           ['+', 226, 22, 48, 42], ['−', 226, 76, 48, 42]],
+  };
+  const MODELS = [
+    { id: 'st20', name: 'SoundTouch 20', match: /soundtouch 20/i,
+      title: 'Hold <em>1</em> and <em>−</em> together', hold: ['1', '−'], secs: 10,
+      after: 'Keep holding for <b>10 seconds</b>, then let go.', light: 'Wait until the <b>Wi-Fi light is solid amber</b>',
+      // Top panel: presets 1-3 over 4-6, volume + over − to their right
+      ...ST20_KEYS },
+    // The 20's bigger sibling: same steps (Bose), layout assumed to match the 20's
+    { id: 'st30', name: 'SoundTouch 30', match: /soundtouch 30(?!0)/i, check: true,
+      title: 'Hold <em>1</em> and <em>−</em> together', hold: ['1', '−'], secs: 10,
+      after: 'Keep holding for <b>10 seconds</b>, then let go.', light: 'Wait until the <b>Wi-Fi light is solid amber</b>',
+      ...ST20_KEYS },
+    { id: 'st10', name: 'SoundTouch 10', match: /soundtouch 10/i, check: true,
+      title: 'Hold <em>1</em> and <em>−</em> together', hold: ['1', '−'], secs: 10,
+      after: 'Keep holding for <b>10 seconds</b>, then let go.', light: 'Wait until the <b>Wi-Fi light is amber</b>',
+      w: 320, h: 100, caps: [['PRESETS', 116, 92], ['VOLUME', 270, 92]], seps: [[234, 24, 234, 66]],
+      keys: [['1', 14, 24, 32, 42], ['2', 50, 24, 32, 42], ['3', 86, 24, 32, 42],
+             ['4', 122, 24, 32, 42], ['5', 158, 24, 32, 42], ['6', 194, 24, 32, 42],
+             ['−', 244, 24, 30, 42], ['+', 278, 24, 30, 42]] },
+    { id: 'st300', name: 'SoundTouch 300 soundbar', match: /soundtouch 300/i,
+      title: 'On the remote: <em>SoundTouch</em>, then hold <em>9</em>', hold: ['SoundTouch', '9'], secs: 10,
+      after: 'Press <b>SoundTouch</b>, then hold <b>9</b> until all the lights flash.', light: 'Wait until the <b>Wi-Fi light is amber</b>',
+      w: 170, h: 250, round: true, caps: [['REMOTE', 85, 240]],
+      keys: [['SoundTouch', 30, 18, 110, 34],
+             ['1', 30, 66, 32, 32], ['2', 69, 66, 32, 32], ['3', 108, 66, 32, 32],
+             ['4', 30, 106, 32, 32], ['5', 69, 106, 32, 32], ['6', 108, 106, 32, 32],
+             ['7', 30, 146, 32, 32], ['8', 69, 146, 32, 32], ['9', 108, 146, 32, 32],
+             ['0', 69, 186, 32, 32]] },
+    { id: 'adapter', name: 'Link Adapter', match: /adapter/i, check: true,
+      title: 'Hold the <em>Control</em> button on the back', hold: ['Control'], secs: 10,
+      after: 'About <b>10 seconds</b>, until the light flashes once.', light: 'Wait until the <b>light is solid amber</b>',
+      w: 300, h: 110, caps: [['BACK', 150, 102]],
+      keys: [['Control', 110, 26, 80, 46]] },
+    { id: 'other', name: 'Other…' },
+  ];
+
+  function keypadSvg(m) {
+    const keys = m.keys.map(([t, x, y, w, h]) => `
+      <g class="kp-key ${m.hold.includes(t) ? 'on' : ''}">
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.min(10, h / 3)}"/>
+        <text x="${x + w / 2}" y="${y + h / 2}" ${t.length > 2 ? 'style="font-size:12.5px"' : ''}>${esc(t)}</text>
+      </g>`).join('');
+    const caps = (m.caps || []).map(([t, x, y]) => `<text class="kp-cap" x="${x}" y="${y}">${t}</text>`).join('');
+    const seps = (m.seps || []).map(([a, b, c, d]) => `<line class="kp-sep" x1="${a}" y1="${b}" x2="${c}" y2="${d}"/>`).join('');
+    const label = `${m.name} buttons, with ${m.hold.join(' and ')} highlighted`;
+    return `<svg class="kp" viewBox="0 0 ${m.w} ${m.h}" role="img" aria-label="${esc(label)}" style="max-width:${m.w + 20}px">
+      <rect class="kp-body" x="1" y="1" width="${m.w - 2}" height="${m.h - 2}" rx="${m.round ? 40 : 18}"/>${seps}${keys}${caps}</svg>`;
+  }
+
+  const wz = {
+    stack: [], timers: [], host: '', found: null, ssid: '', security: 'wpa_or_wpa2',
+    mode: 'add', job: null, model: 'st20', origHost: '', finished: null,
+
+    open(screen = 'speakers') {
+      toggleDeviceMenu(false);
+      this.stack = [];
+      $('wizard').showModal();
+      this.go(screen);
+    },
+    close() {
+      this.clear();
+      $('wizard').close();
+      loadDevices().then(renderDevicePicker);
+    },
+    clear() { this.timers.forEach(t => { clearInterval(t); clearTimeout(t); }); this.timers = []; },
+    go(screen, ...args) {
+      this.clear();
+      this.stack.push([screen, args]);
+      this['s_' + screen](...args);
+      $('wz-body').scrollTop = 0;
+    },
+    back() {
+      this.stack.pop();
+      const prev = this.stack.pop();
+      if (!prev) return this.close();
+      this.go(prev[0], ...prev[1]);
+    },
+    every(ms, fn) { fn(); this.timers.push(setInterval(fn, ms)); },
+    render(step, html, { back = true } = {}) {
+      $('wz-body').innerHTML = `
+        <div class="wz-top">
+          ${back && this.stack.length > 1 ? `<button class="wz-round" aria-label="Back" onclick="wz.back()">${WZ_I.back}</button>` : ''}
+          <span class="wz-step">${step}</span>
+          <button class="wz-round" aria-label="Close" onclick="wz.close()">${WZ_I.close}</button>
+        </div>${html}`;
+    },
+
+    // ── Speakers list ──
+    async s_speakers() {
+      const draw = () => this.render('Speakers', `
+        <h2>Your speakers</h2>
+        <div class="wz-card wz-list">${devices.map(d => `
+          <div class="wz-row">
+            <span class="wz-ico">${WZ_I.speaker}</span>
+            <div class="grow"><div class="t">${esc(d.name)}</div>
+              <div class="s">${esc(d.type || d.id)}${d.online ? '' : ' · offline'}</div></div>
+            ${d.online ? `<button class="wz-mini" onclick="wz.changeWifi('${esc(d.id)}')">Wi-Fi</button>` : ''}
+            ${d.primary ? '' : `<button class="wz-mini danger" onclick="wz.go('remove', '${esc(d.id)}')">Remove</button>`}
+          </div>`).join('')}
+        </div>
+        <div class="wz-actions">
+          <button class="wz-btn" onclick="wz.go('find')">${WZ_I.plus} Add a speaker</button>
+        </div>`, { back: false });
+      draw();
+      devices = (await call('GET', '/api/devices', null, true)) || devices;
+      if (this.current() === 'speakers') draw();
+    },
+    current() { return (this.stack[this.stack.length - 1] || [])[0]; },
+    changeWifi(host) {
+      const d = devices.find(x => x.id === host);
+      this.mode = 'change'; this.host = host; this.found = { host, name: d ? d.name : host };
+      this.go('wifi');
+    },
+
+    // ── Find speakers ──
+    s_find() {
+      this.mode = 'add';
+      let speakers = null, sweeping = false;
+      const draw = () => {
+        if (this.current() !== 'find') return;
+        const fresh = (speakers || []).filter(s => !s.known);
+        const known = (speakers || []).filter(s => s.known);
+        this.render('Add a speaker', `
+          <h2>Looking for speakers</h2>
+          <p class="lead">Turn the speaker on. Speakers already on your Wi-Fi show up here by themselves.</p>
+          <div class="wz-card wz-list">
+            ${fresh.map(s => `
+              <button class="wz-row" onclick='wz.pick(${JSON.stringify(s).replace(/'/g, '&#39;')})'>
+                <span class="wz-ico">${WZ_I.speaker}</span>
+                <div class="grow"><div class="t">${esc(s.name)}</div>
+                  <div class="s">${esc(s.type)} · ${s.connection === 'ethernet' ? 'on a cable' : 'on ' + esc(s.wifi || 'Wi-Fi')}</div></div>
+                <span class="wz-mini">${s.connection === 'ethernet' ? 'Set up' : 'Add'}</span>
+              </button>`).join('')}
+            <div class="wz-row">
+              ${speakers === null || sweeping ? '<span class="wz-spin" aria-hidden="true"></span>' : `<span class="wz-ico">${WZ_I.speaker}</span>`}
+              <div class="grow"><div class="t" style="font-weight:600">${speakers === null ? 'Searching your network…' : fresh.length ? 'Still looking…' : 'No new speakers yet'}</div>
+                ${known.length ? `<div class="s">Already added: ${known.map(k => esc(k.name)).join(', ')}</div>` : ''}</div>
+            </div>
+          </div>
+          <div class="wz-label">Not in the list?</div>
+          <div class="wz-card wz-list">
+            <button class="wz-row" onclick="wz.go('cable')">
+              <span class="wz-ico">${WZ_I.cable}</span>
+              <div class="grow"><div class="t">Plug it in with a network cable</div><div class="s">For speakers with a network port. No buttons.</div></div>
+              <span class="wz-tag">EASY</span>
+            </button>
+            <button class="wz-row" onclick="wz.go('setupmode')">
+              <span class="wz-ico">${WZ_I.buttons}</span>
+              <div class="grow"><div class="t">No cable: use setup mode</div><div class="s">We show you which buttons to hold</div></div>
+            </button>
+          </div>
+          <button class="wz-link" onclick="wz.go('address')">Enter its address instead</button>`);
+      };
+      draw();
+      this.every(6000, async () => {
+        if (sweeping) return;
+        sweeping = true; draw();
+        const r = await call('GET', '/api/setup/discover', null, true);
+        sweeping = false;
+        if (r) speakers = r.speakers; else speakers = speakers || [];
+        draw();
+      });
+    },
+    pick(s) {
+      this.found = s; this.host = s.host;
+      if (s.connection === 'ethernet') { this.origHost = s.host; this.go('wifi'); }
+      else this.startTakeover(s.host);
+    },
+    s_address() {
+      this.render('Add a speaker', `
+        <h2>Its address</h2>
+        <p class="lead">Your router's app or web page lists it, usually under "connected devices".</p>
+        <form class="wz-field" onsubmit="event.preventDefault(); wz.probe()">
+          <label class="wz-label" for="wz-ip">IP address</label>
+          <div class="wz-input"><input id="wz-ip" inputmode="decimal" autocomplete="off" placeholder="192.168.1.60" required></div>
+        </form>
+        <div class="wz-actions"><button class="wz-btn" id="wz-probe" onclick="wz.probe()">Find it</button></div>`);
+      $('wz-ip').focus();
+    },
+    async probe() {
+      const ip = $('wz-ip').value.trim();
+      if (!ip) return;
+      $('wz-probe').disabled = true; $('wz-probe').textContent = 'Looking…';
+      const s = await call('GET', '/api/setup/probe?host=' + encodeURIComponent(ip));
+      $('wz-probe').disabled = false; $('wz-probe').textContent = 'Find it';
+      if (!s) return;
+      if (s.known) return toast(`${s.name} is already added`);
+      this.pick(s);
+    },
+
+    // ── Cable ──
+    s_cable() {
+      this.mode = 'add';
+      this.render('Step 1 of 3 · Cable', `
+        <h2>Plug it into your router</h2>
+        <div class="wz-hero"><svg viewBox="0 0 300 120" role="img" aria-label="A network cable from the back of the speaker to the router" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="14" y="22" width="90" height="76" rx="16" fill="var(--surface)" stroke="var(--text-faint)" stroke-width="2"/>
+          <circle cx="59" cy="60" r="20" stroke="var(--text-faint)" stroke-width="2"/>
+          <rect x="196" y="46" width="90" height="40" rx="9" fill="var(--surface)" stroke="var(--text-faint)" stroke-width="2"/>
+          <path d="M214 46l-6-18M268 46l6-18" stroke="var(--text-faint)" stroke-width="2"/>
+          <circle cx="214" cy="66" r="3" fill="var(--green)" stroke="none"/><circle cx="226" cy="66" r="3" fill="var(--green)" stroke="none"/>
+          <path d="M104 74c40 0 46 30 92 0" stroke="var(--accent)" stroke-width="4"/>
+        </svg></div>
+        <div class="wz-card"><ol class="wz-steps">
+          <li><b class="n">1</b><div>Plug a network cable into the back of the speaker and into your router.</div></li>
+          <li><b class="n">2</b><div>Turn the speaker on. It finds the network by itself.</div></li>
+        </ol></div>
+        <div class="wz-card wz-row"><span class="wz-spin" aria-hidden="true"></span>
+          <div class="grow"><div class="t" style="font-weight:600" id="wz-cable-status">Looking for it…</div>
+          <div class="s">Usually under a minute</div></div></div>
+        <div class="wz-info">${WZ_I.info}<span>You'll unplug the cable again once it's on Wi-Fi.</span></div>`);
+      const seen = new Set(devices.map(d => d.id));
+      this.every(5000, async () => {
+        const r = await call('GET', '/api/setup/discover', null, true);
+        if (!r || this.current() !== 'cable') return;
+        const s = r.speakers.find(x => !x.known && !seen.has(x.host));
+        if (s) { toast('Found ' + s.name); this.pick(s); }
+      });
+    },
+
+    // ── Wi-Fi networks (heard by the speaker itself) ──
+    async s_wifi() {
+      const who = esc(this.found ? this.found.name : 'the speaker');
+      const step = this.mode === 'change' ? 'Change Wi-Fi' : 'Step 2 of 3 · Wi-Fi';
+      this.render(step, `
+        <h2>Which Wi-Fi should ${who} use?</h2>
+        <div class="wz-card wz-row"><span class="wz-spin" aria-hidden="true"></span>
+          <div class="grow"><div class="t" style="font-weight:600">The speaker is listening for networks…</div></div></div>`);
+      const r = await call('GET', '/api/setup/wifi/networks?host=' + encodeURIComponent(this.host));
+      if (this.current() !== 'wifi') return;
+      const nets = r ? r.networks : [];
+      const bars = sig => { const n = sig > -55 ? 4 : sig > -65 ? 3 : sig > -75 ? 2 : 1;
+        return `<span class="wz-bars" aria-label="Signal ${n} of 4">${[6, 9, 12, 16].map((h, i) => `<i class="${i < n ? 'on' : ''}" style="height:${h}px"></i>`).join('')}</span>`; };
+      this.render(step, `
+        <h2>Which Wi-Fi should ${who} use?</h2>
+        <p class="lead">${r ? 'These are the networks the speaker can hear.' : "The speaker couldn't scan. You can type the name instead."}</p>
+        <div class="wz-card wz-list">${nets.map(n => `
+          <button class="wz-row" onclick='wz.choose(${JSON.stringify(n).replace(/'/g, '&#39;')})'>
+            ${bars(n.signal)}
+            <div class="grow"><div class="t">${esc(n.ssid)}</div>${n.ssid === r.current ? '<div class="s">Connected now</div>' : ''}</div>
+            ${n.secure ? `<span style="width:16px;color:var(--text-dim)">${WZ_I.lock}</span>` : ''}
+          </button>`).join('')}
+          <button class="wz-row" onclick="wz.choose(null)"><span class="wz-ico">${WZ_I.plus}</span><div class="grow"><div class="t">Other network…</div></div></button>
+        </div>
+        ${this.mode === 'change' ? `<div class="wz-info">${WZ_I.info}<span>The speaker keeps its current Wi-Fi and remembers this one too. It joins whichever it can reach first, so this is how you prepare for a new router.</span></div>` : ''}`);
+    },
+    choose(n) {
+      this.ssid = n ? n.ssid : '';
+      this.security = n ? (n.secure ? n.security : 'none') : 'wpa_or_wpa2';
+      this.go('password');
+    },
+    s_password() {
+      const step = this.mode === 'change' ? 'Change Wi-Fi' : 'Step 2 of 3 · Wi-Fi';
+      const open = this.security === 'none';
+      this.render(step, `
+        <h2>${this.ssid ? `Password for "${esc(this.ssid)}"` : 'Your Wi-Fi'}</h2>
+        <p class="lead">It's the password your phone uses for this Wi-Fi, often printed on the router.</p>
+        <form class="wz-field" id="wz-pass-form" onsubmit="event.preventDefault(); wz.join()">
+          ${this.ssid ? '' : `<label class="wz-label" for="wz-ssid">Wi-Fi name</label>
+            <div class="wz-input"><input id="wz-ssid" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32" required></div>`}
+          ${open ? '' : `<label class="wz-label" for="wz-pass">Wi-Fi password</label>
+          <div class="wz-input"><input id="wz-pass" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" minlength="8" maxlength="63" required>
+            <button type="button" class="wz-round" aria-label="Show password" onclick="const i=$('wz-pass'); i.type = i.type === 'password' ? 'text' : 'password'">${WZ_I.eye}</button></div>`}
+        </form>
+        <div class="wz-info ok">${WZ_I.lock}<span>The password goes straight to the speaker. TouchingSounds never stores it.</span></div>
+        <div class="wz-actions"><button class="wz-btn" id="wz-join" onclick="wz.join()">Connect the speaker</button></div>`);
+      ($('wz-ssid') || $('wz-pass') || {}).focus?.();
+    },
+    async join() {
+      const ssid = this.ssid || ($('wz-ssid') ? $('wz-ssid').value.trim() : '');
+      const password = $('wz-pass') ? $('wz-pass').value : '';
+      if (!ssid) return toast('Type the Wi-Fi name', true);
+      if (this.security !== 'none' && password.length < 8) return toast('Wi-Fi passwords are at least 8 characters', true);
+      this.ssid = ssid;
+      const btn = $('wz-join');
+      btn.disabled = true; btn.innerHTML = '<span class="wz-spin" aria-hidden="true"></span> Connecting… up to 40 seconds';
+      const r = await call('POST', '/api/setup/wifi/join', { host: this.host, ssid, password, security: this.security });
+      if (this.current() !== 'password') return;
+      if (!r) { btn.disabled = false; btn.textContent = 'Connect the speaker'; return; }
+      if (this.mode === 'change') return this.go('wifisaved', r.joined);
+      if (r.joined && r.ip) {
+        toast(`On ${ssid}. You can unplug the cable.`);
+        return this.startTakeover(r.ip);
+      }
+      this.go('unplug');
+    },
+    s_wifisaved(joined) {
+      const name = esc(this.found.name);
+      this.render('Change Wi-Fi', `
+        <div class="wz-done-ico">${WZ_I.check}</div>
+        <h2 class="wz-center">${joined ? `${name} is on "${esc(this.ssid)}"` : `${name} knows "${esc(this.ssid)}" now`}</h2>
+        <p class="lead wz-center">${joined ? 'Nothing else to do.' : "It stays on its current Wi-Fi for now and moves over when that one's gone, for example when you swap the router."}</p>
+        <div class="wz-actions"><button class="wz-btn" onclick="wz.stack=[]; wz.go('speakers')">Done</button></div>`, { back: false });
+    },
+    s_unplug() {
+      const deviceId = this.found && this.found.deviceID;
+      const started = Date.now();
+      this.render('Step 2 of 3 · Wi-Fi', `
+        <h2>Now unplug the cable</h2>
+        <p class="lead">Leave the power on. ${esc(this.found.name)} should join "${esc(this.ssid)}" within a minute.</p>
+        <div class="wz-card wz-row" id="wz-unplug"><span class="wz-spin" aria-hidden="true"></span>
+          <div class="grow"><div class="t" style="font-weight:600">Waiting for it on Wi-Fi…</div></div></div>`, { back: false });
+      this.every(5000, async () => {
+        const r = await call('GET', '/api/setup/find?device_id=' + encodeURIComponent(deviceId || ''), null, true);
+        if (this.current() !== 'unplug') return;
+        if (r && r.host && r.connection === 'wifi') return this.startTakeover(r.host);
+        if (Date.now() - started > 150000) {
+          this.clear();
+          $('wz-unplug').outerHTML = `<div class="wz-info danger">${WZ_I.warn}<span>It didn't join "${esc(this.ssid)}". The password may be wrong.
+            Plug the cable back in and try again.</span></div>
+            <div class="wz-actions"><button class="wz-btn" onclick="wz.stack=[]; wz.go('find')">Try again</button></div>`;
+        }
+      });
+    },
+
+    // ── No cable: setup mode, then the phone hands over the Wi-Fi ──
+    s_setupmode() {
+      this.mode = 'add';
+      const m = MODELS.find(x => x.id === this.model) || MODELS[0];
+      const chips = MODELS.map(x => `<button class="${x.id === m.id ? 'on' : ''}" onclick="wz.model='${x.id}'; wz.stack.pop(); wz.go('setupmode')">${x.name}</button>`).join('');
+      if (m.id === 'other') {
+        return this.render('Step 1 of 3 · Setup mode', `
+          <div class="wz-chips" role="group" aria-label="Speaker model">${chips}</div>
+          <h2>Look up your model's steps</h2>
+          <p class="lead">Every SoundTouch has its own button combination. Bose's support page for your model lists it under "Resetting your product" or "Setting up Wi-Fi".</p>
+          <div class="wz-actions">
+            <a class="wz-btn ghost" href="https://support.bose.com/" target="_blank" rel="noopener">Open Bose support</a>
+            <button class="wz-btn" onclick="wz.go('handover')">The Wi-Fi light is amber</button>
+          </div>`);
+      }
+      this.render('Step 1 of 3 · Setup mode', `
+        <div class="wz-chips" role="group" aria-label="Speaker model">${chips}</div>
+        <h2>${m.title}</h2>
+        <div class="wz-card wz-keypad">
+          ${keypadSvg(m)}
+          <div class="wz-count">
+            <svg viewBox="0 0 76 76" aria-hidden="true"><circle class="ring-bg" cx="38" cy="38" r="32"/>
+              <circle class="ring" id="wz-ring" cx="38" cy="38" r="32" stroke-dasharray="201" stroke-dashoffset="0" transform="rotate(-90 38 38)"/>
+              <text x="38" y="39" id="wz-count-n">${m.secs}</text></svg>
+            <div class="msg" id="wz-count-msg">${m.after}<br><button class="wz-link" style="padding:6px 0" onclick="wz.countdown(${m.secs})">Start the countdown</button></div>
+          </div>
+          ${m.check ? '<div class="wz-hint">Drawing not yet checked against a real unit: go by the labels on your speaker.</div>' : ''}
+        </div>
+        <div class="wz-card wz-light"><i></i><span>${m.light}</span></div>
+        <div class="wz-info danger">${WZ_I.warn}<span>This resets the speaker: its old Wi-Fi, presets and Spotify login are cleared.
+          Does it have a network port? <a href="#" onclick="event.preventDefault(); wz.go('cable')">Use a cable instead</a>.</span></div>
+        <div class="wz-actions"><button class="wz-btn" onclick="wz.go('handover')">The light is amber</button></div>`);
+    },
+    countdown(secs) {
+      this.clear();
+      let left = secs;
+      const tick = () => {
+        $('wz-count-n').textContent = left;
+        $('wz-ring').style.strokeDashoffset = String(201 * (1 - left / secs));
+        if (left === 0) {
+          $('wz-count-msg').innerHTML = '<b>Let go now.</b>';
+          try { navigator.vibrate && navigator.vibrate(200); } catch {}
+          this.clear();
+        }
+        left--;
+      };
+      $('wz-count-msg').innerHTML = '<b>Keep holding…</b>';
+      tick();
+      this.timers.push(setInterval(tick, 1000));
+    },
+    s_handover(step = 1) {
+      this.render('Step 2 of 3 · Wi-Fi', `
+        <div><span class="wz-tag warn">TRY IT</span></div>
+        <h2>Give it your Wi-Fi from this phone</h2>
+        <form class="wz-field" onsubmit="event.preventDefault()">
+          <label class="wz-label" for="wz-ho-ssid">Your Wi-Fi name</label>
+          <div class="wz-input"><input id="wz-ho-ssid" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32" value="${esc(this.ssid)}"></div>
+          <label class="wz-label" for="wz-ho-pass">Wi-Fi password</label>
+          <div class="wz-input"><input id="wz-ho-pass" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="63">
+            <button type="button" class="wz-round" aria-label="Show password" onclick="const i=$('wz-ho-pass'); i.type = i.type === 'password' ? 'text' : 'password'">${WZ_I.eye}</button></div>
+        </form>
+        <div class="wz-card"><ol class="wz-steps">
+          <li class="${step === 1 ? 'now' : 'past'}"><b class="n">1</b><div>In your phone's Wi-Fi settings, join the network called <b>"Bose SoundTouch …"</b>, then come back here.
+            ${step === 1 ? '<button class="wz-btn" onclick="wz.handover()">I\'m on the speaker\'s Wi-Fi</button>' : ''}</div></li>
+          <li class="${step === 2 ? 'now' : step > 2 ? 'past' : ''}"><b class="n">2</b><div>Tell it to connect. A page from the speaker opens; come back here after.
+            ${step === 2 ? '<button class="wz-btn" onclick="wz.handoverLeave()">Connect it</button>' : ''}</div></li>
+          <li class="${step === 3 ? 'now' : ''}"><b class="n">3</b><div>Switch your phone back to your own Wi-Fi.
+            ${step === 3 ? '<button class="wz-btn" onclick="wz.stack=[]; wz.go(\'find\')">Find the speaker</button>' : ''}</div></li>
+        </ol></div>
+        <div class="wz-info">${WZ_I.info}<span>Didn't work? Bose's SoundTouch app can do this step too. Once the speaker is on your Wi-Fi, come back and tap <b>Add a speaker</b>.</span></div>`);
+    },
+    // The speaker in setup mode is at http://192.0.2.1:8090, which this https
+    // page can't fetch.  A top-level form post can reach it: an enctype
+    // text/plain form sends "name=value", so the XML is split across the two.
+    speakerPost(path, xml) {
+      const cut = xml.lastIndexOf(' x') + 2;   // ... x="" ... -> name: "... x", value: '""...'
+      const f = document.createElement('form');
+      f.method = 'POST'; f.enctype = 'text/plain'; f.target = '_blank';
+      f.action = 'http://192.0.2.1:8090' + path;
+      const i = document.createElement('input');
+      i.type = 'hidden'; i.name = xml.slice(0, cut); i.value = xml.slice(cut + 1);
+      f.appendChild(i);
+      document.body.appendChild(f); f.submit(); f.remove();
+    },
+    handover() {
+      const ssid = $('wz-ho-ssid').value.trim(), pass = $('wz-ho-pass').value;
+      if (!ssid) return toast('Type your Wi-Fi name', true);
+      if (pass && pass.length < 8) return toast('Wi-Fi passwords are at least 8 characters', true);
+      this.ssid = ssid;
+      const x = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+      this.speakerPost('/addWirelessProfile',
+        `<addWirelessProfile timeout="30"><profile ssid="${x(ssid)}" password="${x(pass)}" securityType="${pass ? 'wpa_or_wpa2' : 'none'}" x=""></profile></addWirelessProfile>`);
+      this.stack.pop(); this.go('handover', 2);
+      $('wz-ho-ssid').value = ssid; $('wz-ho-pass').value = pass;
+    },
+    handoverLeave() {
+      this.speakerPost('/setup', '<setupState state="SETUP_WIFI_LEAVE" x="" />');
+      this.stack.pop(); this.go('handover', 3);
+    },
+
+    // ── Takeover (server side), naming and presets meanwhile ──
+    async startTakeover(host) {
+      this.host = host;
+      const job = await call('POST', '/api/setup/add', { host });
+      if (!job) return;
+      this.job = job;
+      this.stack = [];
+      this.go('takeover');
+    },
+    s_takeover() {
+      const job = this.job;
+      const others = devices.filter(d => d.id !== job.host);
+      const def = (devices.find(d => d.id === deviceId && d.id !== job.host) || others[0] || {}).id || '';
+      const suggestions = ['Kitchen', 'Bedroom', 'Living room', 'Office', "Kids' room", 'Bathroom'];
+      const keepName = !/^Bose SoundTouch/i.test(job.name) ? job.name : '';
+      this.render('Step 3 of 3 · Setting it up', `
+        <h2>Almost there. Leave it to us.</h2>
+        <div class="wz-card wz-list" id="wz-steps"></div>
+        <div class="wz-field">
+          <label class="wz-label" for="wz-name">Meanwhile: what should we call it?</label>
+          <div class="wz-input"><input id="wz-name" maxlength="60" autocomplete="off" value="${esc(keepName)}" placeholder="Kitchen"></div>
+          <div class="wz-chips">${suggestions.map(n => `<button type="button" onclick="$('wz-name').value=this.textContent; this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===this))">${esc(n)}</button>`).join('')}</div>
+        </div>
+        <div class="wz-field">
+          <label class="wz-label" for="wz-presets">Its six preset buttons</label>
+          <div class="wz-input"><select id="wz-presets">
+            ${others.map(d => `<option value="${esc(d.id)}" ${d.id === def ? 'selected' : ''}>Same as ${esc(d.name)}</option>`).join('')}
+            <option value="">Keep what's on it</option>
+          </select></div>
+        </div>
+        <div class="wz-actions"><button class="wz-btn" id="wz-continue" disabled onclick="wz.finish()">Continue when ready…</button></div>`, { back: false });
+      const paint = j => {
+        const rows = [{ label: j.wifi ? 'On Wi-Fi' : 'Found it', detail: j.wifi ? `Joined "${j.wifi}"` : '', state: 'done' }, ...j.steps];
+        $('wz-steps').innerHTML = rows.map(s => `
+          <div class="wz-row ${s.state}">
+            ${s.state === 'active' ? '<span class="wz-spin" aria-label="In progress"></span>'
+              : `<span class="wz-state ${s.state}">${s.state === 'done' ? WZ_I.check : s.state === 'failed' ? '!' : ''}</span>`}
+            <div class="grow"><div class="t">${esc(s.label)}</div>${s.detail ? `<div class="s wrap">${esc(s.detail)}</div>` : ''}</div>
+          </div>`).join('');
+        const btn = $('wz-continue');
+        if (j.state === 'done') { btn.disabled = false; btn.textContent = 'Continue'; }
+        if (j.state === 'failed') {
+          this.clear();
+          btn.disabled = false; btn.textContent = 'Try again';
+          btn.onclick = () => this.startTakeover(j.host);
+        }
+      };
+      paint(job);
+      this.every(3000, async () => {
+        if (this.job.state !== 'running') return paint(this.job);
+        const j = await call('GET', '/api/setup/jobs/' + job.id, null, true);
+        if (j && this.current() === 'takeover') { this.job = j; paint(j); }
+      });
+    },
+    async finish() {
+      const btn = $('wz-continue');
+      btn.disabled = true; btn.innerHTML = '<span class="wz-spin" aria-hidden="true"></span> Starting a test sound…';
+      const r = await call('POST', '/api/setup/finish', {
+        host: this.job.host, name: $('wz-name').value.trim(), copy_presets_from: $('wz-presets').value });
+      if (!r) { btn.disabled = false; btn.textContent = 'Continue'; return; }
+      const src = devices.find(d => d.id === $('wz-presets').value);
+      this.finished = { ...r, wifi: this.job.wifi, presets: r.copied ? `${r.copied} copied from ${src ? src.name : 'another speaker'}` : 'Kept its own' };
+      this.go('test');
+    },
+    s_test(note = '') {
+      const f = this.finished;
+      this.render('Test sound', `
+        <div class="wz-hero"><svg viewBox="0 0 200 150" role="img" aria-label="Sound waves coming from the speaker" fill="none" stroke-linecap="round">
+          <rect x="62" y="40" width="76" height="76" rx="18" fill="var(--surface)" stroke="var(--text-faint)" stroke-width="2"/>
+          <circle cx="100" cy="78" r="20" stroke="var(--text-dim)" stroke-width="2.5"/><circle cx="100" cy="78" r="6" fill="var(--accent)"/>
+          <path d="M152 52a40 40 0 0 1 0 52M168 38a60 60 0 0 1 0 80M48 52a40 40 0 0 0 0 52M32 38a60 60 0 0 0 0 80" stroke="var(--accent)" stroke-width="3"/>
+        </svg></div>
+        <h2 class="wz-center">Do you hear music from ${esc(f.name)}?</h2>
+        <p class="lead wz-center">We're playing ${esc(f.playing)} at a low volume, so you can check it's the right speaker.</p>
+        ${note ? `<div class="wz-info">${WZ_I.info}<span>${note}</span></div>` : ''}
+        <div class="wz-actions">
+          <button class="wz-btn" onclick="wz.go('done')">Yes, I hear it</button>
+          <button class="wz-btn ghost" id="wz-louder" onclick="wz.louder()">No, nothing yet</button>
+          <span class="wz-note">"No" plays it again, louder, and checks what the speaker reports.</span>
+        </div>`, { back: false });
+    },
+    async louder() {
+      const btn = $('wz-louder');
+      btn.disabled = true; btn.innerHTML = '<span class="wz-spin" aria-hidden="true"></span> Trying again, louder…';
+      const r = await call('POST', '/api/setup/test', { host: this.job.host, louder: true });
+      const playing = r && r.source === 'LOCAL_INTERNET_RADIO' && /PLAY|BUFFER/.test(r.playStatus);
+      this.stack.pop();
+      this.go('test', !r ? "The speaker didn't answer. Check that it's switched on, then try again."
+        : playing ? 'The speaker says it is playing. Check its volume buttons and that nothing is plugged into AUX.'
+        : `The speaker reports "${esc(r.playStatus || r.source)}". Give it a few seconds, then try again.`);
+    },
+    s_done() {
+      const f = this.finished;
+      this.render('', `
+        <div class="wz-done-ico" style="margin-top:20px">${WZ_I.check}</div>
+        <h2 class="wz-center">${esc(f.name)} is ready</h2>
+        <p class="lead wz-center">It plays any radio station, its six buttons work, and it's in the speaker picker.</p>
+        <div class="wz-card">
+          <div class="wz-kv"><span>Model</span><span>${esc(f.type || '—')}</span></div>
+          ${f.wifi ? `<div class="wz-kv"><span>Wi-Fi</span><span>${esc(f.wifi)}</span></div>` : ''}
+          <div class="wz-kv"><span>Presets</span><span>${esc(f.presets)}</span></div>
+        </div>
+        <div class="wz-info">${WZ_I.info}<span>Tip: in your router's settings, give ${esc(f.name)} a fixed address, so the server always finds it.</span></div>
+        <div class="wz-actions">
+          <button class="wz-btn" onclick="wz.playOn()">Play something on ${esc(f.name)}</button>
+          <button class="wz-btn ghost" onclick="wz.stack=[]; wz.go('find')">Add another speaker</button>
+        </div>`, { back: false });
+    },
+    async playOn() {
+      const host = this.job.host;
+      this.clear();
+      $('wizard').close();
+      await loadDevices();
+      selectDevice(host);
+    },
+
+    // ── Remove ──
+    s_remove(host) {
+      const d = devices.find(x => x.id === host) || { id: host, name: host };
+      this.render('Remove', `
+        <h2>Remove ${esc(d.name)}?</h2>
+        <p class="lead">It disappears from the app, with its alarms. Its presets stay saved on the server.</p>
+        <label class="wz-card wz-check"><input type="checkbox" id="wz-undo">
+          <span><b>Also put back its original settings</b><br><span class="wz-hint">Only when you're giving it away: it restarts and stops working with TouchingSounds.</span></span></label>
+        <div class="wz-actions">
+          <button class="wz-btn danger" id="wz-remove" onclick="wz.remove('${esc(host)}')">Remove ${esc(d.name)}</button>
+          <button class="wz-btn ghost" onclick="wz.back()">Cancel</button>
+        </div>`);
+    },
+    async remove(host) {
+      $('wz-remove').disabled = true;
+      const r = await call('POST', '/api/setup/remove', { host, undo_redirect: $('wz-undo').checked });
+      if (!r) { $('wz-remove').disabled = false; return; }
+      toast(r.undone ? 'Removed, and its settings are put back' : 'Removed');
+      if (host === deviceId) {
+        try { localStorage.removeItem('ts-device'); } catch {}
+        await loadDevices();
+        const id = deviceId;
+        deviceId = '';
+        await selectDevice(id);
+      }
+      this.stack = []; this.go('speakers');
+    },
+  };
+  $('wizard').addEventListener('cancel', e => { e.preventDefault(); wz.close(); });
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  (async function init() {
+    let lib = 'search';
+    try { lib = localStorage.getItem('ts-lib') || 'search'; } catch {}
+    setLib(lib);
+    setView('player');
+    renderSearchIntro();
+    await loadDevices();
+    await refresh();
+    await Promise.all([loadFavorites(), loadHistory(), loadPresets()]);
+    refresh();
+    const v = await call('GET', '/api/version', null, true);
+    if (v) $('footer').textContent = `TouchingSounds v${v.version} · ${v.commit}`;
+  })();
+  let poll = setInterval(refresh, 3000);
+  document.addEventListener('visibilitychange', () => {
+    clearInterval(poll);
+    if (!document.hidden) { refresh(); poll = setInterval(refresh, 3000); }
+  });
+  window.addEventListener('resize', updateSegIndicator);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+</script>
+</body>
+</html>

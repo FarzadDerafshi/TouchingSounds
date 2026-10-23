@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "TouchingSounds",
+  "short_name": "TouchingSounds",
+  "description": "Internet radio and remote control for the Bose SoundTouch 20",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1c1e24",
+  "theme_color": "#1c1e24",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,54 @@
+services:
+
+  touchingsounds:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-dev}   # set by ProdRelease.bat
+    container_name: touchingsounds
+    ports:
+      - "8000:8000"
+    volumes:
+      # marge state: Sources.xml snapshot (taken once, before the marge
+      # redirect), presets.json, recents.json. Do not delete Sources.xml
+      # after the redirect, since it is the only copy of the original sources.
+      - ./data:/app/data
+    environment:
+      # Your settings come from a .env file next to this one (git-ignored):
+      # copy .env.example to .env and fill it in. See .env.example for what
+      # each setting means.
+      - BOSE_DEVICES=${BOSE_DEVICES:?Set BOSE_DEVICES in .env (copy .env.example)}
+      - BOSE_SERVER_URL=${BOSE_SERVER_URL:?Set BOSE_SERVER_URL in .env (copy .env.example)}
+      - BOSE_PORT=${BOSE_PORT:-8090}
+      - TS_SCAN_SUBNETS=${TS_SCAN_SUBNETS:-}
+      - TS_DATA_DIR=/app/data
+      # UPnP AVTransport controlURL on the speaker (UpnpSource listens on
+      # 127.0.0.1:40010 on SoundTouch firmware 27). Skips discovery.
+      - BOSE_UPNP_CONTROL_URL=http://localhost:40010/AVTransport/Control
+      - PRESET_1_URL=${PRESET_1_URL:-}
+      - PRESET_1_NAME=${PRESET_1_NAME:-}
+      - PRESET_2_URL=${PRESET_2_URL:-}
+      - PRESET_2_NAME=${PRESET_2_NAME:-}
+      - PRESET_3_URL=${PRESET_3_URL:-}
+      - PRESET_3_NAME=${PRESET_3_NAME:-}
+      - PRESET_4_URL=${PRESET_4_URL:-}
+      - PRESET_4_NAME=${PRESET_4_NAME:-}
+      - PRESET_5_URL=${PRESET_5_URL:-}
+      - PRESET_5_NAME=${PRESET_5_NAME:-}
+      - PRESET_6_URL=${PRESET_6_URL:-}
+      - PRESET_6_NAME=${PRESET_6_NAME:-}
+    restart: unless-stopped
+
+  # Obsolete since 0.6.0 (marge fixes source registration), and port 80 is
+  # already taken on the Office Server, which made `docker compose up` fail.
+  # Opt-in only: docker compose --profile tunein-proxy up -d
+  tunein-proxy:
+    profiles: ["tunein-proxy"]
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: tunein-proxy
+    ports:
+      - "80:80"
+    restart: unless-stopped
