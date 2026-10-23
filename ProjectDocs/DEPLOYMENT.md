@@ -236,5 +236,9 @@ speaker added from the app.)
   history; the private history is kept as a git bundle outside the repo. Server
   settings moved from `docker-compose.yml` to a gitignored `.env`, which the first
   `ProdRelease.bat` run after the switch writes from the running container.
+- **2026-10-23:** 1.5.1 live (`568e80a`), released from Telegram `/release`, the first
+  release from the new public repo (same URL, so the server's checkout needed no change;
+  the hard checkout took the unrelated history in its stride). `.env` was created
+  from the running container on that run. No new packages.
 - **2026-10 (earlier):** v0.5.x deploy failed. The likely cause was the now-removed
   `tunein-proxy` service failing on port 80; this was never confirmed.

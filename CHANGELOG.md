@@ -6,7 +6,8 @@ All notable changes to TouchingSounds are documented here.
 
 ## [1.5.1] — 2026-10-23  **Public release: settings in `.env`, MIT licence**
 
-Not yet released.
+Live 2026-10-23 (`568e80a`), released from Telegram `/release`. The first run wrote
+`.env` from the running container as planned.
 
 ### Changed
 - The repo is public under the MIT licence, with a root `README.md` (what it is,
