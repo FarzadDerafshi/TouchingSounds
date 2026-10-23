@@ -6,7 +6,7 @@ All notable changes to TouchingSounds are documented here.
 
 ## [1.5.2] — 2026-10-23  **Search: the bottom bars no longer float mid-screen on iPhone**
 
-Not yet released.
+Live 2026-10-23 (`9e73f9a`). The user confirmed the fix on the iPhone (installed app).
 
 ### Fixed
 - On the iPhone, scrolling search results with the keyboard open left the mini-player

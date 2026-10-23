@@ -240,5 +240,8 @@ speaker added from the app.)
   release from the new public repo (same URL, so the server's checkout needed no change;
   the hard checkout took the unrelated history in its stride). `.env` was created
   from the running container on that run. No new packages.
+- **2026-10-23:** 1.5.2 live (`9e73f9a`): the iPhone search-scroll fix (keyboard closes
+  on scroll, bottom bars hidden while typing). Confirmed by the user on the iPhone.
+  Web app only; no new packages or settings.
 - **2026-10 (earlier):** v0.5.x deploy failed. The likely cause was the now-removed
   `tunein-proxy` service failing on port 80; this was never confirmed.
