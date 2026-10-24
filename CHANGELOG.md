@@ -6,6 +6,8 @@ All notable changes to TouchingSounds are documented here.
 
 ## [1.5.3] — 2026-10-24  **New app icon and logo: Pulse Bars**
 
+Live 2026-10-24 (`731ab8a`). The user confirmed the deploy.
+
 ### Changed
 - New app icon: five rounded peach bars, centred and balanced, on charcoal (the old icon's
   four bars sat high and off-centre). Regenerated icon-512, icon-192, apple-touch-icon and

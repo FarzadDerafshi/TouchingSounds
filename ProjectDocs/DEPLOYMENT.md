@@ -243,5 +243,10 @@ speaker added from the app.)
 - **2026-10-23:** 1.5.2 live (`9e73f9a`): the iPhone search-scroll fix (keyboard closes
   on scroll, bottom bars hidden while typing). Confirmed by the user on the iPhone.
   Web app only; no new packages or settings.
+- **2026-10-24:** 1.5.3 live (`731ab8a`): new Pulse Bars app icon and top-bar logo
+  (service-worker cache `ts-shell-v2`). Deploy confirmed by the user. Web app only; no new
+  packages or settings. The icons are drawn by a small Pillow script (not in the repo):
+  five 9-wide bars, rx 4.5, at x 18.5/32/45.5/59/72.5, heights 22/46/64/40/18, centred
+  on y 50 in a 100x100 box, `#e4a072` on `#1c1e24`. The same SVG is inline in index.html.
 - **2026-10 (earlier):** v0.5.x deploy failed. The likely cause was the now-removed
   `tunein-proxy` service failing on port 80; this was never confirmed.

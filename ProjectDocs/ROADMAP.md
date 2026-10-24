@@ -33,6 +33,7 @@
 
 ## Done
 
+- 1.5.3 (2026-10-24, live `731ab8a`): new Pulse Bars app icon and logo ("Touching" light, "Sounds" bold).
 - 1.5.2 (2026-10-23, live `9e73f9a`): search results scroll on iPhone without the bottom bars floating mid-screen.
 - 1.5.1 (2026-10-23, live `568e80a`): public repo (MIT), settings in a gitignored `.env`, root README.
 - 1.5.0 (2026-10-22, live `d6f5831`): "Add a speaker" wizard (find, cable + Wi-Fi from the
