@@ -129,7 +129,10 @@ body[data-lib="recent"]    #panel-recent { display: block; }
 .topbar { padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; letter-spacing: .2px; }
-.brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+/* The app icon's Pulse Bars mark, then the two-weight wordmark (Touching light, Sounds bold). */
+.brand-mark { width: 26px; height: 26px; border-radius: 6px; background: #1c1e24; flex-shrink: 0; }
+.brand-light { font-weight: 300; }
+.brand-bold { font-weight: 700; color: var(--accent); }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 /* Device picker */
 .device-picker { position: relative; min-width: 0; display: flex; }
@@ -762,7 +765,7 @@ footer { text-align: center; font-size: 11px; color: var(--text-faint); padding:
 </svg>
 
 <header class="topbar">
-  <div class="brand"><span class="brand-dot"></span>TouchingSounds</div>
+  <div class="brand"><svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><g fill="#e4a072"><rect x="18.5" y="39" width="9" height="22" rx="4.5"/><rect x="32" y="27" width="9" height="46" rx="4.5"/><rect x="45.5" y="18" width="9" height="64" rx="4.5"/><rect x="59" y="30" width="9" height="40" rx="4.5"/><rect x="72.5" y="41" width="9" height="18" rx="4.5"/></g></svg><span><span class="brand-light">Touching</span><span class="brand-bold">Sounds</span></span></div>
   <div class="topbar-right">
     <div class="device-picker">
       <button class="device-btn" id="device-btn" aria-haspopup="menu" aria-expanded="false" disabled>

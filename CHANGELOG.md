@@ -4,6 +4,19 @@ All notable changes to TouchingSounds are documented here.
 
 ---
 
+## [1.5.3] — 2026-10-24  **New app icon and logo: Pulse Bars**
+
+### Changed
+- New app icon: five rounded peach bars, centred and balanced, on charcoal (the old icon's
+  four bars sat high and off-centre). Regenerated icon-512, icon-192, apple-touch-icon and
+  the 16/32 favicons. The user picked it from six concepts.
+- The top bar shows the new logo: the Pulse Bars mark plus the wordmark "Touching" (light)
+  "Sounds" (bold, accent colour), in place of the plain dot.
+- Service-worker cache bumped to `ts-shell-v2` so installed apps pick up the new icons.
+  iPhone home-screen icons may only change after the app is removed and added again.
+
+---
+
 ## [1.5.2] — 2026-10-23  **Search: the bottom bars no longer float mid-screen on iPhone**
 
 Live 2026-10-23 (`9e73f9a`). The user confirmed the fix on the iPhone (installed app).

@@ -1,7 +1,7 @@
 // TouchingSounds service worker: makes the app installable and keeps the
 // shell (page, manifest, icons) available offline.  API calls always go to
 // the network, since they control a live speaker.
-const CACHE = 'ts-shell-v1';
+const CACHE = 'ts-shell-v2';
 const SHELL = ['/', '/static/manifest.json', '/static/icons/icon-192.png', '/static/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
