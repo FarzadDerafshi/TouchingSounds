@@ -19,7 +19,8 @@
 2. Release, either way:
    - **Telegram:** `/release` in the Mira Olives bot → TouchingSounds → "✅ Yes, release".
      The server runs `ProdRelease.bat` unattended within a minute and the bot reports the
-     result. If the pull updated the script, the runner runs it a second time automatically.
+     result. If the pull updated the script, the script starts its new version in the same
+     run (since 2026-11-02); in the rare case it changes twice, the runner runs it again.
      How it works: `_Office Server Release System.md` (OneDrive, IT, Web and Mail Hosting);
      the master copy is in the Mira AI Department repo, `ProjectDocs/RELEASE-SYSTEM.md`.
    - **On the server:** double-click `D:\apps\TouchingSounds\ProdRelease.bat` and accept
