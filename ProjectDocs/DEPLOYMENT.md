@@ -30,7 +30,7 @@ The script:
 | Step | What it does |
 |---|---|
 | 1/5 | Copies `data\` to `DataBackup\data_<timestamp>` (aborts if that fails) |
-| 2/5 | Makes the folder match `origin/main` exactly (`git fetch` + `git checkout -f -B main origin/main`), not a merge. Edits to tracked files made on the server are saved first as `DataBackup\server_edits_<timestamp>.patch`. A folder without `.git` is turned into a checkout. Stops if this changed `ProdRelease.bat` itself; just run it again. |
+| 2/5 | Makes the folder match `origin/main` exactly (`git fetch` + `git checkout -f -B main origin/main`), not a merge. Edits to tracked files made on the server are saved first as `DataBackup\server_edits_<timestamp>.patch`. A folder without `.git` is turned into a checkout. If this changed `ProdRelease.bat` itself, the new version starts right away from a fresh temp copy (same log, no second backup) and finishes the release. |
 | (before 3/5) | If `.env` is missing, writes it from the running container's settings (`docker inspect`); stops if it can't. |
 | 3/5 | `docker compose up -d --build` with `GIT_COMMIT` set, so the app knows its commit |
 | 4/5 | Waits up to 4 minutes for `/api/version` and checks the commit matches |
@@ -167,7 +167,7 @@ speaker added from the app.)
 | `marge: UNHANDLED` in logs | The speaker asked for a marge endpoint we don't emulate. Usually harmless; note the path. |
 | `marge: request for unknown account` in logs | A speaker asked for an account no configured device has. Check its `/info` account and `BOSE_DEVICES`. |
 | Adapter radio fails after a release | Logs: `Device 192.168.100.150: …`. If the console steps ran but radio still fails, power-cycle it with the server up. |
-| Release stopped at "[STOP] This pull updated ProdRelease.bat" | Expected. Run it again. |
+| Release stopped at "[STOP] ProdRelease.bat changed again while its new version was starting" (exit 2) | Someone pushed another script change during the release. Nothing was rebuilt; run it again (the Telegram runner does that by itself). The old "[STOP] This pull updated ProdRelease.bat" only appears once, on the release that brings the self-relaunch. |
 | App shows a speaker offline, but it plays and answers from a PC | A Docker network on the server overlaps that speaker's subnet, so containers route its traffic into a bridge. On the server: `docker network ls -q \| % { docker network inspect $_ --format "{{.Name}}  {{range .IPAM.Config}}{{.Subnet}} {{end}}" }` and look for `192.168.x` ranges covering `192.168.1.0/24` or `192.168.100.0/24`. Fix it by pinning that network's subnet (to `10.x`) in its project. See the 2026-10-19 log entry. |
 
 ## Log
@@ -248,5 +248,11 @@ speaker added from the app.)
   packages or settings. The icons are drawn by a small Pillow script (not in the repo):
   five 9-wide bars, rx 4.5, at x 18.5/32/45.5/59/72.5, heights 22/46/64/40/18, centred
   on y 50 in a 100x100 box, `#e4a072` on `#1c1e24`. The same SVG is inline in index.html.
+- **2026-11-02:** `ProdRelease.bat` on release standard v2 (self-relaunch; see
+  DECISIONS.md). Tested offline against a throwaway remote and a CRLF clone. The first
+  release that brings it is pulled by the old script, which stops once ("This pull
+  updated ProdRelease.bat itself", exit 0); the Telegram runner re-runs it by itself.
+  The old script's fixed `%TEMP%\touchingsounds_prodrelease.bat` may stay behind in the
+  server's TEMP; harmless, delete it any time.
 - **2026-10 (earlier):** v0.5.x deploy failed. The likely cause was the now-removed
   `tunein-proxy` service failing on port 80; this was never confirmed.

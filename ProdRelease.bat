@@ -1,11 +1,37 @@
 @echo off
-setlocal
+setlocal EnableExtensions DisableDelayedExpansion
 
 :: =====================================================================
 ::  TouchingSounds production release (Office Server, D:\apps\TouchingSounds)
-::  Double-click it. It backs up data\, pulls main from GitHub, rebuilds
-::  the container and checks that the new build answers.
+::  Double-click it, or Telegram /release. It backs up data\, makes the
+::  folder match main on GitHub, rebuilds the container and checks that
+::  the new build answers.
 ::  Full runbook: ProjectDocs\DEPLOYMENT.md
+::  Release standard v2: Mira AI Department, ProjectDocs\RELEASE-SYSTEM.md
+::  section 5 (only the self-relaunch applies here; nothing is decided
+::  from what changed, so there's no .last_release_commit).
+::
+::  Exit codes: 0 released, 1 failed ([ERROR]), 2 run it again (loop
+::              guard, see below).
+::
+::  It runs from a temporary copy of itself: cmd reads a .bat line by line
+::  from disk, so step 2 rewriting this file mid-run would make cmd
+::  execute garbage. If step 2 changed this script, the copy starts the
+::  new version in place (same log, no second backup) and exits with its
+::  exit code. If that new version sees the script change once more, it
+::  stops with exit 2 instead (loop guard).
+::
+::  Hand-over interface -- an old copy must be able to start a new
+::  version, so keep these exactly as they are:
+::    ProdRelease.bat --from-copy <root folder>
+::      runs the release itself from a temporary copy; <root folder> is
+::      where ProdRelease.bat lives and ends with a backslash.
+::    PRODRELEASE_UNATTENDED=1    started by the Telegram runner: no pause
+::    PRODRELEASE_RELAUNCHED=1    the new version, started after a
+::                                self-update: skips the data\ backup
+::    PRODRELEASE_LOGFILE=<path>  with RELAUNCHED: the log to append to
+::  Delayed expansion stays off: it would strip the "!" from the success
+::  line the Telegram runner looks for.
 :: =====================================================================
 
 :: --- Self-elevate to Administrator if not already running elevated
@@ -17,34 +43,57 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-:: --- Run from a temporary copy of this script. cmd reads a running .bat
-::     line by line from disk, so step 2's git pull replacing this very
-::     file mid-run would make it execute garbled lines. The original hands
-::     over to the copy (no CALL, so control never comes back) and passes
-::     its own folder along. Step 2 stops if the pull changed this script,
-::     so the new version runs from its first line on the next attempt. ---
-if /i "%~1"=="--from-copy" goto :running_from_copy
-copy /y "%~f0" "%TEMP%\touchingsounds_prodrelease.bat" >nul
-"%TEMP%\touchingsounds_prodrelease.bat" --from-copy "%~dp0"
-:running_from_copy
+:: --- Run from a temporary copy of this script (see the header). A new
+::     name every time: a fixed one would let a relaunched new version
+::     overwrite the copy that is still running. Everything up to the
+::     exit stays inside this one (...) block, so cmd has read all of it
+::     before step 2 can change this file. Run by hand, the window waits
+::     for a key once, here at the very end. ---
+set "SELF_COPY=%TEMP%\touchingsounds_prodrelease_%RANDOM%%RANDOM%.bat"
+if /i not "%~1"=="--from-copy" (
+    copy /y "%~f0" "%SELF_COPY%" >nul || (
+        echo [ERROR] Could not copy ProdRelease.bat to the TEMP folder.
+        if not "%PRODRELEASE_UNATTENDED%"=="1" pause
+        exit /b 1
+    )
+    call "%SELF_COPY%" --from-copy "%~dp0"
+    call set "RC=%%ERRORLEVEL%%"
+    del "%SELF_COPY%" >nul 2>&1
+    if not "%PRODRELEASE_UNATTENDED%"=="1" pause
+    setlocal EnableDelayedExpansion
+    exit /b !RC!
+)
 set "ROOT=%~2"
 set "SELF_COPY=%~f0"
 cd /d "%ROOT%"
 
+:: A relaunched new version appends to the first run's log.
 for /f %%T in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set "TS=%%T"
+if not "%PRODRELEASE_RELAUNCHED%"=="1" goto :new_log
+if not defined PRODRELEASE_LOGFILE goto :new_log
+set "LOGFILE=%PRODRELEASE_LOGFILE%"
+echo --- New version of ProdRelease.bat started --- >> "%LOGFILE%"
+goto :log_ready
+:new_log
 set "LOGFILE=%ROOT%deploy_log_%TS%.txt"
-echo Log file: %LOGFILE%
 echo Log file: %LOGFILE% > "%LOGFILE%"
+:log_ready
+echo Log file: %LOGFILE%
 
 echo ==========================================
-echo Starting TouchingSounds Production Release...
+if "%PRODRELEASE_RELAUNCHED%"=="1" (
+    echo Starting TouchingSounds Production Release - new version of ProdRelease.bat...
+) else (
+    echo Starting TouchingSounds Production Release...
+)
 echo ==========================================
 
 :: --- Find git. It's often not on PATH, especially in the elevated window
 ::     (on 2026-10-19 the first run failed with "'git' is not recognized").
 ::     Look in the usual Git for Windows and GitHub Desktop locations and add
 ::     the first hit to PATH for this run. Checked before anything else
-::     happens, so a missing git costs nothing. ---
+::     happens, so a missing git costs nothing. A relaunched new version
+::     inherits the PATH and finds it at once. ---
 where git >nul 2>&1
 if %errorlevel% equ 0 goto :git_found
 for %%G in ("%ProgramFiles%\Git\cmd" "%ProgramFiles(x86)%\Git\cmd" "%LOCALAPPDATA%\Programs\Git\cmd" "%ProgramW6432%\Git\cmd") do (
@@ -61,8 +110,7 @@ echo [ERROR] git was not found on this machine.
 echo Install Git for Windows, e.g. in PowerShell:  winget install --id Git.Git -e
 echo then run this script again. Nothing has been changed.
 echo git not found >> "%LOGFILE%"
-pause
-exit /b 1
+goto :fail
 :git_found
 for /f "delims=" %%P in ('where git') do (
     echo Using %%P
@@ -84,7 +132,12 @@ set "GIT_CONFIG_VALUE_0=%GIT_CONFIG_VALUE_0:~0,-1%"
 :: Step 1: Back up data\. It holds the speaker's original Sources.xml
 :: (with the Spotify/Alexa logins; after the marge redirect it's the only
 :: copy), favorites, history and presets. Gitignored, so git can't touch
-:: it, but a copy per release costs nothing.
+:: it, but a copy per release costs nothing. A relaunched new version
+:: skips it: the first run took it a moment ago.
+if not "%PRODRELEASE_RELAUNCHED%"=="1" goto :backup
+echo [1/5] data\ backup already taken by the first run -- skipped.
+goto :backup_done
+:backup
 echo [1/5] Backing up data\ ...
 if not exist "%ROOT%data" (
     echo data\ doesn't exist yet -- nothing to back up ^(first start^).
@@ -93,9 +146,8 @@ if not exist "%ROOT%data" (
 if not exist "%ROOT%DataBackup" mkdir "%ROOT%DataBackup"
 robocopy "%ROOT%data" "%ROOT%DataBackup\data_%TS%" /E /NFL /NDL /NJH /NJS /NP >nul
 if %errorlevel% geq 8 (
-    echo [ERROR] Backing up data\ failed! Aborting before touching any code or containers.
-    pause
-    exit /b 1
+    echo [ERROR] Backing up data\ failed. Aborting before touching any code or containers.
+    goto :fail
 )
 echo Backup saved: DataBackup\data_%TS%
 echo Backup saved: DataBackup\data_%TS% >> "%LOGFILE%"
@@ -109,16 +161,20 @@ echo Backup saved: DataBackup\data_%TS% >> "%LOGFILE%"
 :: untracked (data\, DataBackup\, logs) is left alone. If tracked files
 :: were edited on the server anyway, they're saved as a patch in
 :: DataBackup\ first. A folder without .git (the pre-1.0.0 manual copy)
-:: is turned into a checkout in place.
+:: is turned into a checkout in place. Git's output goes to a temp file
+:: first and is then shown and added to the log, so a relaunched new
+:: version doesn't show the first run's log again.
 echo [2/5] Getting latest code from GitHub...
+set "GIT_OUT=%TEMP%\touchingsounds_git_%RANDOM%%RANDOM%.txt"
+type nul > "%GIT_OUT%"
 if exist "%ROOT%.git" goto :git_fetch
 echo No .git folder -- converting this folder to a git checkout of main...
 echo Converting folder to git checkout >> "%LOGFILE%"
-git init -q >> "%LOGFILE%" 2>&1
-git remote add origin https://github.com/FarzadDerafshi/TouchingSounds.git >> "%LOGFILE%" 2>&1
+git init -q >> "%GIT_OUT%" 2>&1
+git remote add origin https://github.com/FarzadDerafshi/TouchingSounds.git >> "%GIT_OUT%" 2>&1
 
 :git_fetch
-git fetch origin main >> "%LOGFILE%" 2>&1
+git fetch origin main >> "%GIT_OUT%" 2>&1
 if %errorlevel% neq 0 goto :git_failed
 
 :: Any edits to tracked files on the server? (no HEAD yet = fresh init)
@@ -134,32 +190,46 @@ echo           are saved in DataBackup\server_edits_%TS%.patch
 echo Server edits saved to DataBackup\server_edits_%TS%.patch >> "%LOGFILE%"
 
 :git_checkout
-git checkout -f -B main origin/main >> "%LOGFILE%" 2>&1
+git checkout -f -B main origin/main >> "%GIT_OUT%" 2>&1
 if %errorlevel% neq 0 goto :git_failed
-git branch -u origin/main main >> "%LOGFILE%" 2>&1
+git branch -u origin/main main >> "%GIT_OUT%" 2>&1
 goto :git_done
 
 :git_failed
-type "%LOGFILE%"
-echo [ERROR] Git failed! See log: %LOGFILE%
+type "%GIT_OUT%"
+type "%GIT_OUT%" >> "%LOGFILE%"
+del "%GIT_OUT%" >nul 2>&1
+echo [ERROR] Git failed. See log: %LOGFILE%
 echo If it asked for a login: run "git fetch origin main" here once by hand
 echo so Git Credential Manager stores it, then run this script again.
-pause
-exit /b 1
+goto :fail
 
 :git_done
-type "%LOGFILE%"
-fc /b "%SELF_COPY%" "%ROOT%ProdRelease.bat" >nul 2>&1
-if %errorlevel% neq 0 (
-    echo.
-    echo [STOP] This pull updated ProdRelease.bat itself. Nothing has been
-    echo        rebuilt yet -- just run ProdRelease.bat again so the new
-    echo        version runs from the start. ^(The data backup above is kept.^)
-    echo ProdRelease.bat changed by pull -- stopped for re-run. >> "%LOGFILE%"
-    pause
-    exit /b 0
-)
+type "%GIT_OUT%"
+type "%GIT_OUT%" >> "%LOGFILE%"
+del "%GIT_OUT%" >nul 2>&1
 
+:: Step 2 changed this script: start the new version in place. This copy
+:: isn't touched by the checkout, so it can safely wait for it here.
+fc /b "%SELF_COPY%" "%ROOT%ProdRelease.bat" >nul 2>&1
+if not errorlevel 1 goto :script_current
+if "%PRODRELEASE_RELAUNCHED%"=="1" goto :rerun
+echo The pull updated ProdRelease.bat itself -- starting the new version...
+echo ProdRelease.bat changed by pull -- starting the new version. >> "%LOGFILE%"
+set "NEW_COPY=%TEMP%\touchingsounds_prodrelease_%RANDOM%%RANDOM%.bat"
+copy /y "%ROOT%ProdRelease.bat" "%NEW_COPY%" >nul
+if errorlevel 1 (
+    echo [ERROR] Could not copy the new ProdRelease.bat to the TEMP folder.
+    goto :fail
+)
+set "PRODRELEASE_RELAUNCHED=1"
+set "PRODRELEASE_LOGFILE=%LOGFILE%"
+call "%NEW_COPY%" --from-copy "%ROOT%"
+set "RC=%ERRORLEVEL%"
+del "%NEW_COPY%" >nul 2>&1
+endlocal & exit /b %RC%
+
+:script_current
 :: --- This server's settings (speaker IPs, BOSE_SERVER_URL, preset defaults)
 ::     live in .env, git-ignored, since the repo went public (2026-10-23).
 ::     docker-compose.yml refuses to start without it. If it's missing, take
@@ -174,8 +244,7 @@ if %errorlevel% neq 0 (
     echo         Copy .env.example to .env in %ROOT%, fill it in, and run this again.
     echo         Nothing has been rebuilt.
     echo .env missing and not recoverable >> "%LOGFILE%"
-    pause
-    exit /b 1
+    goto :fail
 )
 echo .env created from the running container >> "%LOGFILE%"
 :env_ok
@@ -184,15 +253,15 @@ echo .env created from the running container >> "%LOGFILE%"
 :: after an ffmpeg/requirements change takes a few minutes, and live output
 :: shows the window isn't frozen. GIT_COMMIT is a build arg (see
 :: docker-compose.yml) so /api/version and the app footer show the commit.
+set "GIT_COMMIT="
 for /f %%C in ('git rev-parse --short HEAD') do set "GIT_COMMIT=%%C"
 echo [3/5] Rebuilding and restarting touchingsounds at commit %GIT_COMMIT%...
 echo Building commit %GIT_COMMIT% >> "%LOGFILE%"
 docker compose up -d --build
 if %errorlevel% neq 0 (
-    echo [ERROR] Docker compose failed!
+    echo [ERROR] Docker compose failed.
     echo Docker compose failed >> "%LOGFILE%"
-    pause
-    exit /b 1
+    goto :fail
 )
 
 :: Step 4: Confirm the new build answers. On start the app checks the
@@ -207,10 +276,26 @@ powershell -NoProfile -Command "$log='%LOGFILE%'; for ($i = 0; $i -lt 80; $i++) 
 echo [5/5] Checking the speaker...
 powershell -NoProfile -Command "$log='%LOGFILE%'; try { $s = Invoke-RestMethod 'http://localhost:8000/api/status' -TimeoutSec 10; $m = 'Speaker OK: source=' + $s.source + ' volume=' + $s.volume } catch { $m = '[WARNING] Speaker not reachable -- is it on, and reachable from this server?' }; Write-Host $m; Add-Content -Path $log -Value $m -Encoding ascii"
 
+echo Release successful at %GIT_COMMIT%. >> "%LOGFILE%"
 echo ==========================================
-echo TouchingSounds Production Release Successful!
 echo Log saved to: %LOGFILE%
 echo Web app:  http://localhost:8000  ^(other devices: BOSE_SERVER_URL in .env^)
+echo TouchingSounds Production Release Successful!
 echo ==========================================
-pause
-endlocal
+set "RC=0"
+goto :end
+
+:fail
+echo Release FAILED. >> "%LOGFILE%"
+echo === Release FAILED -- see the [ERROR] above. ===
+set "RC=1"
+goto :end
+
+:rerun
+echo [STOP] ProdRelease.bat changed again while its new version was starting.
+echo        Nothing has been rebuilt. Run ProdRelease.bat again.
+echo Loop guard: ProdRelease.bat changed again -- stopped. >> "%LOGFILE%"
+set "RC=2"
+
+:end
+endlocal & exit /b %RC%

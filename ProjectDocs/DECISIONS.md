@@ -5,6 +5,28 @@ Why things are built the way they are, not what they do (that's
 
 ---
 
+## 2026-11-02 — `ProdRelease.bat` starts its own new version (release standard v2)
+
+**Ask:** the Mira AI Department release standard v2 (its `ProjectDocs/RELEASE-SYSTEM.md`
+section 5); only the self-relaunch applies here.
+
+**Decision:** when step 2 changes `ProdRelease.bat`, the running temp copy copies the
+new version to a new temp name and runs it in place (`call`), instead of stopping with
+"run it again". The new version skips the `data\` backup, appends to the same
+`deploy_log_*.txt`, and its exit code is passed on. If it sees the script change once
+more, it stops with exit 2, nothing built (loop guard). The original pauses once at the
+end when run by hand, never under the Telegram runner.
+
+**Why:** one release instead of two runs (and two backups) whenever the script changes.
+A fixed temp name would let the new version overwrite the copy that's still running, so
+every copy gets a new name. Delayed expansion stays off: it would strip the `!` from
+"Successful!", which the runner looks for. The hand-over (`--from-copy <root>` plus the
+`PRODRELEASE_*` variables) is documented in the script header and must stay stable,
+because an old copy starts the new version. Nothing here depends on what changed, so
+there's no `.last_release_commit`.
+
+---
+
 ## 2026-10-22 — 1.5.0: the speakers wizard
 
 **Ask:** connect a speaker to Wi-Fi and to the server in a guided way a non-technical
