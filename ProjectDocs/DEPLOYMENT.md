@@ -255,5 +255,7 @@ speaker added from the app.)
   updated ProdRelease.bat itself", exit 0); the Telegram runner re-runs it by itself.
   The old script's fixed `%TEMP%\touchingsounds_prodrelease.bat` may stay behind in the
   server's TEMP; harmless, delete it any time.
+- **2026-11-03:** That release done from Telegram `/release`, successful; `/api/version`
+  reports `19006b9`. The relaunch itself is proven live the next time the script changes.
 - **2026-10 (earlier):** v0.5.x deploy failed. The likely cause was the now-removed
   `tunein-proxy` service failing on port 80; this was never confirmed.
