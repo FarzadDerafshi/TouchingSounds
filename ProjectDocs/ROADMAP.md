@@ -19,6 +19,10 @@
   to the name search.
 - **Clear a preset slot** from the app. Not done yet because the firmware's remove-preset
   call hasn't been verified on this speaker; slots can be overwritten meanwhile.
+- **Daylight saving on the speaker's clock:** the device clock should move with summer and
+  winter time by itself. Bose's cloud probably handled this before; with it gone, the app
+  could set the time from the server in the phone's time zone (as alarms already do).
+  Which firmware call sets the clock (`/clockDisplay` is the known lead) still needs checking.
 
 ## Later / ideas
 
