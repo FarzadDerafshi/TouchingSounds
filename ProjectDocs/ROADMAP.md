@@ -30,6 +30,24 @@
   itself plays audio, and here the speaker plays, not the phone.
 - Link your own Spotify to the adapter (its previous owner's login was removed).
 - Group the two speakers (multiroom), if the firmware allows it across the tunnel.
+- **Speakers without a VPN (only if this ever becomes a product).** Asked 2026-11-05: could
+  the Cloudflare tunnel replace WireGuard? Not on its own. Traffic goes both ways, and a
+  tunnel only carries the speaker → server half:
+  - *Speaker → server* (marge, BMX, relay) could use the Cloudflare hostname, but those
+    paths would have to bypass Cloudflare Access (a speaker can't log in) and so become
+    public; they serve the speaker's Spotify/Alexa secrets, which is why `main.py` keeps
+    them LAN-only today. A secret token in the path (`/marge/<token>/…`) would be the
+    minimum. Untested: whether the 2022 firmware trusts Cloudflare's certificates over
+    HTTPS, and Cloudflare's limits on long radio streams through the relay.
+  - *Server → speaker* (8090 control, 8080 preset listener, 17000/23 setup, alarms, sleep
+    timer, clock check) can't go through a tunnel at all: it needs a route into the home
+    network.
+  - Options: keep router-to-router WireGuard (simplest for two sites, no extra hardware);
+    Cloudflare private network routing (`cloudflared` on an always-on box at each site +
+    WARP on the server; swaps WireGuard for Cloudflare but adds a box); or a small agent per
+    site (e.g. a Raspberry Pi) that connects out to the server and passes its commands to
+    the speakers, so no VPN or open ports anywhere. The agent is the product-scale design
+    and a real architecture change. Not needed now.
 
 ## Done
 
