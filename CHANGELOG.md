@@ -6,6 +6,9 @@ All notable changes to TouchingSounds are documented here.
 
 ## [1.6.1] — 2026-11-05  **Two quick preset presses no longer swap stations forever**
 
+Live 2026-11-05 (`d2b379e`, together with 1.6.0). The user confirmed it: the station
+swapping that was running stopped with the release, without unplugging the speaker.
+
 ### Fixed
 - Pressing two preset buttons on the speaker within about 3 seconds (3, then 6) made it
   switch between the two stations every few seconds, forever; a third press joined the
@@ -20,6 +23,8 @@ All notable changes to TouchingSounds are documented here.
 ---
 
 ## [1.6.0] — 2026-11-05  **Speaker clocks keep the right time all year**
+
+Live 2026-11-05 with 1.6.1 (`d2b379e`).
 
 ### Fixed
 - The SoundTouch 20's display clock was an hour behind since 25 October. The speaker is
