@@ -51,6 +51,7 @@
 
 ## Done
 
+- 1.6.1 (2026-11-05): two quick preset presses no longer swap stations forever.
 - 1.6.0 (2026-11-05): speaker clocks kept on the right local time by the server (the
   SoundTouch 20's old zone data ran Istanbul an hour behind in winter).
 - 1.5.3 (2026-10-24, live `731ab8a`): new Pulse Bars app icon and logo ("Touching" light, "Sounds" bold).

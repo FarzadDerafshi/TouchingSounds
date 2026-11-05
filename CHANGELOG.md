@@ -4,6 +4,21 @@ All notable changes to TouchingSounds are documented here.
 
 ---
 
+## [1.6.1] — 2026-11-05  **Two quick preset presses no longer swap stations forever**
+
+### Fixed
+- Pressing two preset buttons on the speaker within about 3 seconds (3, then 6) made it
+  switch between the two stations every few seconds, forever; a third press joined the
+  cycle (reported by the user, seen live on the SoundTouch 20). Cause: the server's
+  preset listener checks each press 3 s later and selects the station itself if the
+  speaker isn't playing it. It checked the older press after the newer one had started,
+  "corrected" the speaker back, and the speaker reports every selection, ours too, as a
+  new preset press, so the two presses kept undoing each other. Now only the latest
+  press is checked: a new press cancels the pending check. Present since the listener
+  was written; it only shows with quick successive presses.
+
+---
+
 ## [1.6.0] — 2026-11-05  **Speaker clocks keep the right time all year**
 
 ### Fixed

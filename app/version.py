@@ -1,3 +1,3 @@
 """Product version, shown in the UI footer and at /api/version (see CHANGELOG.md)."""
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"

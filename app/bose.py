@@ -1858,6 +1858,29 @@ async def run_preset_listener(get_presets, device_host: str) -> None:
     uri     = f"ws://{device_host}:8080"
     backoff = 5
 
+    async def check(preset_id: int, preset: dict) -> None:
+        # If the speaker's stored preset already is our station, it
+        # plays it itself. Stale slots (e.g. the 0.4.x
+        # localhost:8080/N.json ones) are also LOCAL_INTERNET_RADIO,
+        # so compare the location, not just the source.
+        await asyncio.sleep(3)
+        with contextlib.suppress(BoseError, ET.ParseError):
+            np = ET.fromstring(await now_playing())
+            item = np.find("ContentItem")
+            if item is not None and item.get("location") == preset["location"]:
+                log.info("Preset %d: speaker is playing it natively", preset_id)
+                return
+        log.info("Preset %d pressed → selecting %r ourselves", preset_id, preset["name"])
+        try:
+            await _post("/select", _content_item_xml(preset["location"], preset["name"]))
+        except BoseError as exc:
+            log.error("Preset %d select failed: %s", preset_id, exc)
+
+    # Only the latest press counts: a newer one cancels the pending check.
+    # Checking an older press after a newer one played would "correct" the
+    # speaker back, and our /select comes back as a preset press of its own,
+    # so two quick presses used to swap stations forever (2026-11-05).
+    pending: asyncio.Task | None = None
     while True:
         try:
             async with websockets.connect(uri, subprotocols=["gabbo"]) as ws:
@@ -1873,24 +1896,13 @@ async def run_preset_listener(get_presets, device_host: str) -> None:
                     if not preset:
                         log.warning("Preset %d pressed — slot not configured, ignoring", preset_id)
                         continue
-                    # If the speaker's stored preset already is our station, it
-                    # plays it itself. Stale slots (e.g. the 0.4.x
-                    # localhost:8080/N.json ones) are also LOCAL_INTERNET_RADIO,
-                    # so compare the location, not just the source.
-                    await asyncio.sleep(3)
-                    with contextlib.suppress(BoseError, ET.ParseError):
-                        np = ET.fromstring(await now_playing())
-                        item = np.find("ContentItem")
-                        if item is not None and item.get("location") == preset["location"]:
-                            log.info("Preset %d: speaker is playing it natively", preset_id)
-                            continue
-                    log.info("Preset %d pressed → selecting %r ourselves", preset_id, preset["name"])
-                    try:
-                        await _post("/select", _content_item_xml(preset["location"], preset["name"]))
-                    except BoseError as exc:
-                        log.error("Preset %d select failed: %s", preset_id, exc)
+                    if pending:
+                        pending.cancel()
+                    pending = asyncio.create_task(check(preset_id, preset))
 
         except asyncio.CancelledError:
+            if pending:
+                pending.cancel()
             log.info("WS preset listener %s: cancelled", device_host)
             return
         except Exception as exc:
