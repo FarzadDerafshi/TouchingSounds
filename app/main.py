@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 import app.alarm as alarm
 import app.bose as bose
+import app.clock as clock
 import app.library as library
 import app.marge as marge
 import app.setup as setup
@@ -57,6 +58,12 @@ async def _setup_device(d: bose.Device) -> None:
 _listeners: dict[str, asyncio.Task] = {}
 
 
+def _on_added(h: str) -> None:
+    """A speaker was added in the app: listen for its preset buttons, set its clock."""
+    _start_listener(h)
+    clock.on_added(h)
+
+
 def _start_listener(h: str) -> None:
     """Start device `h`'s preset-button listener (idempotent)."""
     if h not in _listeners or _listeners[h].done():
@@ -81,10 +88,11 @@ async def lifespan(_: FastAPI):
 
     setup_task = asyncio.create_task(setup_all())
     alarm.start()
+    clock.start()
     for d in bose.DEVICES:
         _start_listener(d.host)
     # Speakers added or removed in the app (app/setup.py)
-    setup.on_added, setup.on_removed = _start_listener, _stop_listener
+    setup.on_added, setup.on_removed = _on_added, _stop_listener
     log.info("Devices: %s", ", ".join(f"{d.host}{' (fresh)' if d.fresh else ''}" for d in bose.DEVICES))
     try:
         yield
@@ -96,6 +104,7 @@ async def lifespan(_: FastAPI):
         await songs.stop_all()
         await sleep.stop_all()
         await alarm.stop_all()
+        await clock.stop_all()
         await bose.close_shells()
         log.info("Background tasks stopped")
 
@@ -104,6 +113,7 @@ api = FastAPI(title="TouchingSounds", version=VERSION, lifespan=lifespan)
 api.include_router(marge.router)
 api.include_router(library.router)
 api.include_router(setup.router)
+api.include_router(clock.router)
 
 
 # ── Public access (Cloudflare tunnel) ────────────────────────────────────────

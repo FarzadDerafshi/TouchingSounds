@@ -85,6 +85,7 @@ If a press doesn't end up on our station within 3 s, it selects the station itse
 | `songs.py` | The song now playing on an internet-radio stream: station feeds (Power group, Radyo Voyage) or ICY `StreamTitle`, plus a cover search (Deezer, iTunes). Watchers run only while the app polls. |
 | `sleep.py` | Sleep timer per device: fade out over the last minute, standby, volume back. In memory. |
 | `alarm.py` | Alarms per device: a 15 s clock rings due alarms (quiet start, station, volume rise over 90 s, preset backups) and records the outcome. Stored in `data/alarms.json`; times in the zone of the phone that set them. |
+| `clock.py` | Speaker clocks: every 15 min (and when a speaker is added) compares the time each speaker shows with the real time in our zone (`TS_TIME_ZONE`, else the phone's) and, if off, sets the speaker to a fixed-offset zone such as `Etc/GMT-3`. `/api/clock`, `/api/clock/zone`. |
 | `marge.py` | marge stand-in, per device: account, sources, presets, recents, provider settings, the "no software update" reply. Takes the Sources.xml snapshot. |
 | `setup.py` | The speakers wizard's API (`/api/setup/*`): discovery (port-8090 sweep), the speaker's Wi-Fi scan and join, the takeover job (console redirect + restart), finish (name, presets, test sound), remove. |
 | `bose.py` | Device registry (`data/devices.json`, current device per request/task) and speaker access: REST (8090), console (17000), root shell (23), websocket (8080); setup, `/select`, `/storePreset`, orion locations. |
@@ -102,6 +103,7 @@ device has the same files in `data/devices/<ip>/`. Favorites and history are sha
 | `presets.json` | Presets saved from the app, or long-pressed on the speaker. Overrides the `PRESET_N_URL` defaults in `.env`. |
 | `favorites.json` | Favorite stations. |
 | `history.json` | Last 30 stations played from the app. |
+| `clock.json` | The time zone of the phone that last opened the app (speaker clocks follow it unless `TS_TIME_ZONE` is set). |
 | `alarms.json` | All alarms (every device; each names its device). Next ring time and last outcome included. |
 | `recents.json` | Recents as reported by the speaker to marge. |
 | `devices.json` | The speakers: address and setup route (`fresh`). The first is the primary. |

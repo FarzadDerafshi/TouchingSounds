@@ -5,6 +5,29 @@ Why things are built the way they are, not what they do (that's
 
 ---
 
+## 2026-11-05 — Speaker clocks: fixed-offset zones, checked by the server
+
+**Problem:** the speakers' time-zone data is from before 2016. A SoundTouch 20 set to
+`Europe/Istanbul` still applies the old rule (`EET-2EEST,M3.5.0/3,M10.5.0/4`), so from
+late October to late March its clock is an hour behind. The rootfs zone files can't be
+updated sensibly, and Bose's cloud no longer corrects anything.
+
+**Decision:** the server compares the offset each speaker shows (`/clockTime`: UTC time
+plus local time) with the real offset from Python's zone data, and only on a mismatch
+sets `timezoneInfo` through `POST /clockDisplay` to the matching `Etc/GMT±N` zone, which
+every speaker has. Checked every 15 minutes, on add, and when the zone changes. The zone
+is `TS_TIME_ZONE`, else the phone that last opened the app, so it works without editing
+the server's `.env`.
+
+**Why:** a fixed offset can't be wrong because of stale rules, and the periodic check moves
+it along where summer time still exists. A speaker that already shows the right time keeps
+its own named zone. `userOffsetMinute` was rejected: on top of the old rule it would be an
+hour ahead in summer. Half-hour zones (no `Etc/GMT` name) fall back to the zone's own name.
+Cost: a phone abroad that opens the app moves the home speakers' clocks too; set
+`TS_TIME_ZONE` to pin them.
+
+---
+
 ## 2026-11-02 — `ProdRelease.bat` starts its own new version (release standard v2)
 
 **Ask:** the Mira AI Department release standard v2 (its `ProjectDocs/RELEASE-SYSTEM.md`

@@ -113,6 +113,9 @@ Reserve the speaker's IP in the router afterwards: the app knows speakers by add
 The server searches the /24 of every configured speaker. For another subnet, set
 `TS_SCAN_SUBNETS` (comma-separated CIDRs, e.g. `192.168.1.0/24,192.168.100.0/24`).
 
+Speaker clocks follow the zone of the phone that last opened the app. To pin them to one
+zone, set `TS_TIME_ZONE` (e.g. `Europe/Istanbul`) in `.env` and release.
+
 A speaker whose own Spotify/Alexa logins should be kept needs the root-shell route
 instead: add it to `data/devices.json` by hand with `"fresh": false` (it needs
 `remote_services`) and restart the container.

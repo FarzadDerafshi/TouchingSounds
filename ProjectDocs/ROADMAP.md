@@ -19,14 +19,6 @@
   to the name search.
 - **Clear a preset slot** from the app. Not done yet because the firmware's remove-preset
   call hasn't been verified on this speaker; slots can be overwritten meanwhile.
-- **Speaker clock one hour behind in winter (Türkiye):** the SoundTouch 20 is set to
-  `Europe/Istanbul`, but its built-in time-zone data predates Türkiye's 2016 switch to
-  permanent UTC+3 (`EET-2EEST,M3.5.0/3,M10.5.0/4`), so it falls back to UTC+2 every late
-  October. UTC itself is right, and alarms are unaffected (they run on the server's zone data).
-  Fixed by hand on 2026-11-05: `POST /clockDisplay` with `timezoneInfo="Etc/GMT-3"` (fixed
-  UTC+3; the speaker saves it in `/mnt/nv/localtime`). Still to do: a server check that
-  compares `/clockTime` with the phone's zone and corrects any speaker that drifts (e.g. one
-  set up again after a reset, which comes back on `Europe/Istanbul`).
 
 ## Later / ideas
 
@@ -41,6 +33,8 @@
 
 ## Done
 
+- 1.6.0 (2026-11-05): speaker clocks kept on the right local time by the server (the
+  SoundTouch 20's old zone data ran Istanbul an hour behind in winter).
 - 1.5.3 (2026-10-24, live `731ab8a`): new Pulse Bars app icon and logo ("Touching" light, "Sounds" bold).
 - 1.5.2 (2026-10-23, live `9e73f9a`): search results scroll on iPhone without the bottom bars floating mid-screen.
 - 1.5.1 (2026-10-23, live `568e80a`): public repo (MIT), settings in a gitignored `.env`, root README.

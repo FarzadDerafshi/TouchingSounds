@@ -258,6 +258,15 @@ async def now_playing() -> str:
 async def volume() -> str:
     return await _get("/volume")
 
+async def clock_time() -> str:
+    return await _get("/clockTime")
+
+async def clock_display() -> str:
+    return await _get("/clockDisplay")
+
+async def set_clock_display(xml: str) -> None:
+    await _post("/clockDisplay", xml)
+
 async def info() -> str:
     return await _get("/info")
 

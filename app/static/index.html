@@ -2689,6 +2689,7 @@ footer { text-align: center; font-size: 11px; color: var(--text-faint); padding:
     await refresh();
     await Promise.all([loadFavorites(), loadHistory(), loadPresets()]);
     refresh();
+    call('POST', '/api/clock/zone', { tz: TZ }, true);   // speakers' clocks follow it (app/clock.py)
     const v = await call('GET', '/api/version', null, true);
     if (v) $('footer').textContent = `TouchingSounds v${v.version} · ${v.commit}`;
   })();

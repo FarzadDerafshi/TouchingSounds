@@ -89,6 +89,10 @@ light/dark setting, the default), **light** (sun) and **dark** (moon).
   the switch turns it off without deleting it. Each speaker has its own alarms, and
   they survive app releases. If an alarm couldn't play (speaker unplugged or offline,
   server off), the button gets a red dot and the alarm list says why.
+- **Speaker clock:** the server keeps the clock on the speaker's display on your
+  phone's local time, summer and winter, by itself. If the clock is off it's corrected
+  within 15 minutes of opening the app. To pin it to one zone, see `TS_TIME_ZONE` in
+  `.env.example`.
 - Play/pause, stop, volume and mute. Previous/next appear only for sources with tracks
   (Spotify, Bluetooth).
 - **Presets:** the speaker's six buttons. Tap one to play it. The one currently

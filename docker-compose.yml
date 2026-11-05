@@ -22,6 +22,7 @@ services:
       - BOSE_SERVER_URL=${BOSE_SERVER_URL:?Set BOSE_SERVER_URL in .env (copy .env.example)}
       - BOSE_PORT=${BOSE_PORT:-8090}
       - TS_SCAN_SUBNETS=${TS_SCAN_SUBNETS:-}
+      - TS_TIME_ZONE=${TS_TIME_ZONE:-}
       - TS_DATA_DIR=/app/data
       # UPnP AVTransport controlURL on the speaker (UpnpSource listens on
       # 127.0.0.1:40010 on SoundTouch firmware 27). Skips discovery.

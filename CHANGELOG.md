@@ -4,6 +4,27 @@ All notable changes to TouchingSounds are documented here.
 
 ---
 
+## [1.6.0] — 2026-11-05  **Speaker clocks keep the right time all year**
+
+### Fixed
+- The SoundTouch 20's display clock was an hour behind since 25 October. The speaker is
+  set to `Europe/Istanbul`, but its built-in time-zone data predates Türkiye's 2016 move
+  to permanent UTC+3, so it still switches to UTC+2 every winter. Alarms were never
+  affected (they run on the server's own zone data). Fixed by hand on the home speaker
+  on 2026-11-05; this release makes the fix automatic.
+
+### Added
+- `app/clock.py`: every 15 minutes, when a speaker is added and when the time zone
+  changes, the server compares the time each speaker shows with the real local time.
+  A speaker that's off is switched to a fixed-offset zone (`Etc/GMT-3` for UTC+3), with
+  all its other clock settings kept; one that's right is left alone. In zones with
+  summer time the next check moves the offset along.
+- The time zone comes from `TS_TIME_ZONE` in `.env` if set, otherwise from the phone
+  that last opened the app (stored in `data/clock.json`). `GET /api/clock` shows the
+  zone and each speaker's last check.
+
+---
+
 ## [1.5.3] — 2026-10-24  **New app icon and logo: Pulse Bars**
 
 Live 2026-10-24 (`731ab8a`). The user confirmed the deploy.
