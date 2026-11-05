@@ -24,7 +24,9 @@ swapping that was running stopped with the release, without unplugging the speak
 
 ## [1.6.0] — 2026-11-05  **Speaker clocks keep the right time all year**
 
-Live 2026-11-05 with 1.6.1 (`d2b379e`).
+Live 2026-11-05 with 1.6.1 (`d2b379e`). The user confirmed it: after opening the app the
+server picked up `Europe/Istanbul` from the phone, `/api/clock` reports the SoundTouch 20
+as `ok` (UTC+3), and the clock was still right after switching the speaker off and on.
 
 ### Fixed
 - The SoundTouch 20's display clock was an hour behind since 25 October. The speaker is
