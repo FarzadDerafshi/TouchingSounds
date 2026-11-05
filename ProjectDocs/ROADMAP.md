@@ -19,10 +19,13 @@
   to the name search.
 - **Clear a preset slot** from the app. Not done yet because the firmware's remove-preset
   call hasn't been verified on this speaker; slots can be overwritten meanwhile.
-- **Daylight saving on the speaker's clock:** the device clock should move with summer and
-  winter time by itself. Bose's cloud probably handled this before; with it gone, the app
-  could set the time from the server in the phone's time zone (as alarms already do).
-  Which firmware call sets the clock (`/clockDisplay` is the known lead) still needs checking.
+- **Speaker clock one hour behind in winter (Türkiye):** the SoundTouch 20 is set to
+  `Europe/Istanbul`, but its built-in time-zone data predates Türkiye's 2016 switch to
+  permanent UTC+3 (`EET-2EEST,M3.5.0/3,M10.5.0/4`), so it falls back to UTC+2 every late
+  October. UTC itself is right, and alarms are unaffected (they run on the server's zone data).
+  Fix idea: set `timezoneInfo` to a fixed zone (`Etc/GMT-3`, present on the speaker) via
+  `POST /clockDisplay`, not yet tried; later, a server check that compares `/clockTime`
+  with the phone's zone and corrects any speaker that drifts.
 
 ## Later / ideas
 
