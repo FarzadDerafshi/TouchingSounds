@@ -23,9 +23,10 @@
   `Europe/Istanbul`, but its built-in time-zone data predates Türkiye's 2016 switch to
   permanent UTC+3 (`EET-2EEST,M3.5.0/3,M10.5.0/4`), so it falls back to UTC+2 every late
   October. UTC itself is right, and alarms are unaffected (they run on the server's zone data).
-  Fix idea: set `timezoneInfo` to a fixed zone (`Etc/GMT-3`, present on the speaker) via
-  `POST /clockDisplay`, not yet tried; later, a server check that compares `/clockTime`
-  with the phone's zone and corrects any speaker that drifts.
+  Fixed by hand on 2026-11-05: `POST /clockDisplay` with `timezoneInfo="Etc/GMT-3"` (fixed
+  UTC+3; the speaker saves it in `/mnt/nv/localtime`). Still to do: a server check that
+  compares `/clockTime` with the phone's zone and corrects any speaker that drifts (e.g. one
+  set up again after a reset, which comes back on `Europe/Istanbul`).
 
 ## Later / ideas
 
